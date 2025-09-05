@@ -37,8 +37,46 @@ def suggest_selectors(html_snippet: str, api_key: Optional[str] = None, model: O
 		temperature=0.1,
 	)
 	content = resp.choices[0].message.content or "{}"
-	# Attempt to locate JSON in the content
 	import json
+	try:
+		start = content.find("{")
+		end = content.rfind("}")
+		if start != -1 and end != -1:
+			content = content[start:end+1]
+		return json.loads(content)
+	except Exception:
+		return {}
+
+
+VALUE_PROMPT_SYSTEM = (
+	"You help fill required fields on Japanese contact forms.\n"
+	"Given a JSON array of required fields (each with key, label, placeholder, name, id, type), and a context (company_name, contact_name),\n"
+	"return a JSON object where keys are the provided 'key' values and values are strings to input.\n"
+	"Rules: Use Japanese where appropriate. Use realistic placeholders (e.g., 氏名=山田 太郎, 会社名=株式会社サンプル, 電話=050-1234-5678, メール=info@example.com).\n"
+	"Never include newlines in values; keep them short. If unsure, provide a reasonable default."
+)
+
+
+def generate_values(required_fields: List[Dict[str, str]], context: Dict[str, str], api_key: Optional[str] = None, model: Optional[str] = None) -> Dict[str, str]:
+	if not required_fields:
+		return {}
+	client = _client(api_key)
+	model_id = model or DEFAULT_MODEL
+	import json
+	payload = {
+		"required_fields": required_fields[:50],
+		"context": {k: context.get(k, "") for k in ["company_name", "contact_name"]},
+	}
+	messages = [
+		{"role": "system", "content": VALUE_PROMPT_SYSTEM},
+		{"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+	]
+	resp = client.chat.completions.create(
+		model=model_id,
+		messages=messages,
+		temperature=0.2,
+	)
+	content = resp.choices[0].message.content or "{}"
 	try:
 		start = content.find("{")
 		end = content.rfind("}")

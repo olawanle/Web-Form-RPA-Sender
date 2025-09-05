@@ -9,10 +9,10 @@ from typing import Callable, Dict, Optional
 from selenium.common.exceptions import WebDriverException, NoSuchElementException
 from selenium.webdriver.common.by import By
 
-from .ai_assist import suggest_selectors
+from .ai_assist import suggest_selectors, generate_values
 from .browser import create_chrome_driver
 from .captcha import is_captcha_present
-from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit
+from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit, detect_required_errors, collect_required_fields
 from .lead_loader import load_leads, dedupe_against_log
 from .logging_utils import append_log
 from .quota import remaining_quota
@@ -100,6 +100,7 @@ def process_leads(
 	use_multistep_submit: bool = True,
 	ai_assist_mode: str = "off",  # off | failure_only | always
 	openrouter_api_key: Optional[str] = None,
+	ai_fill_required: bool = True,
 	on_progress: Optional[ProgressCallback] = None,
 ) -> None:
 	"""Run the end-to-end lead processing workflow."""
@@ -207,6 +208,39 @@ def process_leads(
 					selectors = suggest_selectors(html, api_key=openrouter_api_key)
 					if _apply_ai_selectors(driver, selectors, values):
 						clicked = True
+
+				# If required errors, try AI to generate values and resubmit once
+				if (not preview) and ai_fill_required and detect_required_errors(driver):
+					required = collect_required_fields(driver)
+					gen = generate_values(required, {"company_name": company_name, "contact_name": contact_name}, api_key=openrouter_api_key)
+					# Fill generated values by name/id
+					for item in required:
+						key = item.get("key")
+						val = gen.get(key, "")
+						if not val:
+							continue
+						# Try select by name or id
+						name = item.get("name") or ""
+						fid = item.get("id") or ""
+						el = None
+						if name:
+							try:
+								el = driver.find_element(By.NAME, name)
+							except Exception:
+								pass
+						if el is None and fid:
+							try:
+								el = driver.find_element(By.ID, fid)
+							except Exception:
+								pass
+						if el is not None:
+							try:
+								el.clear()
+								el.send_keys(val)
+							except Exception:
+								pass
+					# Retry submit
+					clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
 
 				if not clicked:
 					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "failed", "detail": "Submit button not found"})

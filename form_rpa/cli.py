@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--no-multistep", action="store_true", help="Disable multi-step confirm→send handling")
 	p.add_argument("--ai-assist", choices=["off", "failure_only", "always"], default="off", help="Use AI to infer selectors")
 	p.add_argument("--openrouter-api-key", default=None, help="OpenRouter API key (or set OPENROUTER_API_KEY env var)")
+	p.add_argument("--ai-fill-required", action="store_true", help="Use AI to generate values for required fields on validation error")
 	return p.parse_args()
 
 
@@ -43,6 +44,7 @@ def run() -> None:
 		use_multistep_submit=(not args.no_multistep),
 		ai_assist_mode=args.ai_assist,
 		openrouter_api_key=args.openrouter_api_key,
+		ai_fill_required=bool(args.ai_fill_required),
 	)
 
 

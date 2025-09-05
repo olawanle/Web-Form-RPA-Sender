@@ -28,6 +28,7 @@ def main():
 
 		st.subheader("AI Assist (Optional)")
 		ai_mode = st.selectbox("AI Assist Mode", options=["off", "failure_only", "always"], index=0)
+		ai_fill_required = st.checkbox("AI: fill missing required fields on error", value=True)
 		openrouter_api_key = st.text_input("OpenRouter API Key", value=os.getenv("OPENROUTER_API_KEY", ""), type="password")
 
 	lead_file = st.file_uploader("Leads CSV/Excel", type=["csv", "xlsx", "xls"])
@@ -84,7 +85,7 @@ def main():
 				progress_area.write(f"{event}: {company} - {url}")
 				if screenshot and os.path.exists(screenshot):
 					with screenshot_gallery:
-						st.image(screenshot, caption=os.path.basename(screenshot), use_column_width=True)
+						st.image(screenshot, caption=os.path.basename(screenshot), use_container_width=True)
 
 			process_leads(
 				input_path=lead_path,
@@ -102,6 +103,7 @@ def main():
 				use_multistep_submit=bool(use_multistep),
 				ai_assist_mode=ai_mode,
 				openrouter_api_key=(openrouter_api_key or None),
+				ai_fill_required=bool(ai_fill_required),
 				on_progress=on_progress,
 			)
 

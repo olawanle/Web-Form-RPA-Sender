@@ -300,3 +300,57 @@ def wait_post_submit(driver: WebDriver, timeout: int = 10) -> None:
 		)
 	except TimeoutException:
 		pass
+
+ERROR_HINTS_REQUIRED = [
+	"必須", "必須項目", "入力してください", "未入力", "required", "is required",
+]
+
+
+def detect_required_errors(driver: WebDriver) -> bool:
+	page = driver.page_source
+	low = page.lower()
+	if any(h in page for h in ERROR_HINTS_REQUIRED) or any(h in low for h in ["required", "please enter"]):
+		return True
+	# Check for HTML5 validation bubbles by checking :invalid elements count (best-effort)
+	try:
+		invalid_count = driver.execute_script("return document.querySelectorAll(':invalid').length")
+		return bool(invalid_count and invalid_count > 0)
+	except Exception:
+		return False
+
+
+def collect_required_fields(driver: WebDriver) -> List[Dict[str, str]]:
+	fields: List[Dict[str, str]] = []
+	candidates = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select")
+	for el in candidates:
+		try:
+			required = _is_required(el)
+			if not required:
+				continue
+			key = (el.get_attribute("name") or el.get_attribute("id") or "field")
+			item = {
+				"key": key,
+				"label": "",
+				"placeholder": el.get_attribute("placeholder") or "",
+				"name": el.get_attribute("name") or "",
+				"id": el.get_attribute("id") or "",
+				"type": el.get_attribute("type") or el.tag_name,
+			}
+			# Try to find associated label text
+			try:
+				label = el.find_element(By.XPATH, "ancestor::label")
+				if label.text:
+					item["label"] = label.text.strip()
+			except Exception:
+				pass
+			# label[for=id]
+			fid = el.get_attribute("id")
+			if fid:
+				labels = driver.find_elements(By.CSS_SELECTOR, f"label[for='{fid}']")
+				for lb in labels:
+					if lb.text:
+						item["label"] = lb.text.strip()
+			fields.append(item)
+		except Exception:
+			continue
+	return fields
