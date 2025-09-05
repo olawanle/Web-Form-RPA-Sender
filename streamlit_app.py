@@ -26,6 +26,10 @@ def main():
 		sleep_min = st.number_input("Min sleep (s)", min_value=0.0, value=1.0, step=0.1)
 		sleep_max = st.number_input("Max sleep (s)", min_value=0.0, value=3.0, step=0.1)
 
+		st.subheader("AI Assist (Optional)")
+		ai_mode = st.selectbox("AI Assist Mode", options=["off", "failure_only", "always"], index=0)
+		openrouter_api_key = st.text_input("OpenRouter API Key", value=os.getenv("OPENROUTER_API_KEY", ""), type="password")
+
 	lead_file = st.file_uploader("Leads CSV/Excel", type=["csv", "xlsx", "xls"])
 	template_src_choice = st.radio("Message template source", ["Upload file", "Edit in place"], horizontal=True)
 	template_file = None
@@ -96,6 +100,8 @@ def main():
 				screenshot_dir=shot_dir,
 				auto_consent=bool(auto_consent),
 				use_multistep_submit=bool(use_multistep),
+				ai_assist_mode=ai_mode,
+				openrouter_api_key=(openrouter_api_key or None),
 				on_progress=on_progress,
 			)
 

@@ -6,8 +6,10 @@ import time
 from datetime import datetime
 from typing import Callable, Dict, Optional
 
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import WebDriverException, NoSuchElementException
+from selenium.webdriver.common.by import By
 
+from .ai_assist import suggest_selectors
 from .browser import create_chrome_driver
 from .captcha import is_captcha_present
 from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit
@@ -39,6 +41,49 @@ def _wait_dom_ready(driver, timeout: int = 15):
 	return False
 
 
+def _apply_ai_selectors(driver, selectors: Dict[str, object], values: Dict[str, str]) -> bool:
+	success = False
+	def _find(css: str):
+		try:
+			return driver.find_element(By.CSS_SELECTOR, css)
+		except NoSuchElementException:
+			return None
+	# Fill known fields
+	for key in ["name", "company", "email", "phone", "subject", "message"]:
+		css = selectors.get(key)
+		if isinstance(css, str) and css.strip():
+			el = _find(css)
+			if el is not None and values.get(key):
+				try:
+					el.clear()
+					el.send_keys(values[key])
+					success = True
+				except Exception:
+					pass
+	# Consents
+	consents = selectors.get("consents")
+	if isinstance(consents, list):
+		for css in consents:
+			el = _find(css)
+			if el is not None:
+				try:
+					if not el.is_selected():
+						el.click()
+				except Exception:
+					pass
+	# Submit
+	submit_css = selectors.get("submit")
+	if isinstance(submit_css, str) and submit_css.strip():
+		btn = _find(submit_css)
+		if btn is not None:
+			try:
+				btn.click()
+				success = True
+			except Exception:
+				pass
+	return success
+
+
 def process_leads(
 	input_path: str,
 	template_path: str,
@@ -53,6 +98,8 @@ def process_leads(
 	screenshot_dir: Optional[str] = None,
 	auto_consent: bool = True,
 	use_multistep_submit: bool = True,
+	ai_assist_mode: str = "off",  # off | failure_only | always
+	openrouter_api_key: Optional[str] = None,
 	on_progress: Optional[ProgressCallback] = None,
 ) -> None:
 	"""Run the end-to-end lead processing workflow."""
@@ -110,7 +157,6 @@ def process_leads(
 				try:
 					driver.get(inquiry_url)
 				except WebDriverException:
-					# Recreate driver on navigation crash
 					driver.quit()
 					driver = create_chrome_driver(headless=headless)
 					driver.get(inquiry_url)
@@ -143,31 +189,27 @@ def process_leads(
 					"message": message,
 				}
 				fill_fields(driver, values, auto_consent=auto_consent)
-				shot_filled = ""
-				if screenshot_dir:
-					shot_filled = os.path.join(screenshot_dir, f"{lead_prefix}_filled.png")
-					driver.save_screenshot(shot_filled)
-				_emit({"event": "filled", "company_name": company_name, "url": inquiry_url, "screenshot": shot_filled})
+
+				if ai_assist_mode in ("always",):
+					html = driver.page_source
+					selectors = suggest_selectors(html, api_key=openrouter_api_key)
+					_apply_ai_selectors(driver, selectors, values)
 
 				if preview:
-					append_log(log_path, {
-						"company_name": company_name,
-						"inquiry_url": inquiry_url,
-						"status": "preview",
-						"detail": "No submit (preview mode)"
-					})
+					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "preview", "detail": "No submit (preview mode)"})
 					count += 1
 					time.sleep(random.uniform(sleep_min, sleep_max))
 					continue
 
 				clicked = multi_step_submit(driver) if use_multistep_submit else click_submit(driver)
+				if not clicked and ai_assist_mode in ("failure_only",):
+					html = driver.page_source
+					selectors = suggest_selectors(html, api_key=openrouter_api_key)
+					if _apply_ai_selectors(driver, selectors, values):
+						clicked = True
+
 				if not clicked:
-					append_log(log_path, {
-						"company_name": company_name,
-						"inquiry_url": inquiry_url,
-						"status": "failed",
-						"detail": "Submit button not found"
-					})
+					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "failed", "detail": "Submit button not found"})
 					_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": "submit_not_found"})
 					continue
 
@@ -179,31 +221,16 @@ def process_leads(
 				_emit({"event": "submitted_wait", "company_name": company_name, "url": inquiry_url, "screenshot": shot_after})
 
 				if skip_on_captcha and is_captcha_present(driver):
-					append_log(log_path, {
-						"company_name": company_name,
-						"inquiry_url": inquiry_url,
-						"status": "captcha_skipped",
-						"detail": "CAPTCHA after submit"
-					})
+					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "captcha_skipped", "detail": "CAPTCHA after submit"})
 					_emit({"event": "captcha_skipped", "company_name": company_name, "url": inquiry_url})
 					continue
 
-				append_log(log_path, {
-					"company_name": company_name,
-					"inquiry_url": inquiry_url,
-					"status": "submitted",
-					"detail": ""
-				})
+				append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "submitted", "detail": ""})
 				_emit({"event": "submitted", "company_name": company_name, "url": inquiry_url})
 				count += 1
 				time.sleep(random.uniform(sleep_min, sleep_max))
 			except Exception as e:
-				append_log(log_path, {
-					"company_name": company_name,
-					"inquiry_url": inquiry_url,
-					"status": "failed",
-					"detail": str(e)
-				})
+				append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "failed", "detail": str(e)})
 				_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": str(e)})
 	finally:
 		try:
