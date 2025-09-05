@@ -138,6 +138,59 @@ def _dispatch_set_value(driver: WebDriver, element, value: str) -> None:
 		pass
 
 
+def _label_text_for_element(driver: WebDriver, el) -> str:
+	texts: List[str] = []
+	try:
+		label_ancestor = el.find_element(By.XPATH, "ancestor::label")
+		if label_ancestor.text:
+			texts.append(label_ancestor.text.strip())
+	except Exception:
+		pass
+	fid = el.get_attribute("id") or ""
+	if fid:
+		for lb in driver.find_elements(By.CSS_SELECTOR, f"label[for='{fid}']"):
+			if lb.text:
+				texts.append(lb.text.strip())
+	return " ".join(texts)
+
+
+def _checkbox_set_checked(driver: WebDriver, el) -> bool:
+	try:
+		if not el.is_selected():
+			try:
+				driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
+				el.click()
+				return True
+			except Exception:
+				pass
+			# Try clicking label
+			fid = el.get_attribute("id") or ""
+			if fid:
+				for lb in driver.find_elements(By.CSS_SELECTOR, f"label[for='{fid}']"):
+					try:
+						driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", lb)
+						lb.click()
+						if el.is_selected():
+							return True
+					except Exception:
+						continue
+			# Fallback to JS set + events
+		driver.execute_script(
+			"""
+			const el = arguments[0];
+			if (!el.checked) {
+				el.checked = true;
+				el.dispatchEvent(new Event('click', { bubbles: true }));
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+			""",
+			el,
+		)
+		return True
+	except Exception:
+		return False
+
+
 def accept_consents(driver: WebDriver, auto_consent: bool) -> int:
 	if not auto_consent:
 		return 0
@@ -154,10 +207,11 @@ def accept_consents(driver: WebDriver, auto_consent: bool) -> int:
 				try:
 					cb = driver.find_element(By.ID, for_attr)
 					if cb.get_attribute("type") == "checkbox" and not cb.is_selected():
-						cb.click()
-						accepted += 1
+						if _checkbox_set_checked(driver, cb):
+							accepted += 1
 				except Exception:
 					continue
+	# Fallback: unchecked consent-like checkboxes without labels
 	cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
 	for cb in cbs:
 		if cb.is_selected():
@@ -165,14 +219,11 @@ def accept_consents(driver: WebDriver, auto_consent: bool) -> int:
 		name = (cb.get_attribute("name") or "")
 		id_attr = (cb.get_attribute("id") or "")
 		aria = (cb.get_attribute("aria-label") or "")
-		meta = f"{name} {id_attr} {aria}"
+		meta = f"{name} {id_attr} {aria} {_label_text_for_element(driver, cb)}"
 		low = meta.lower()
 		if any(h in meta for h in CONSENT_HINTS) or any(k in low for k in ["privacy", "terms", "agree", "policy"]):
-			try:
-				cb.click()
+			if _checkbox_set_checked(driver, cb):
 				accepted += 1
-			except Exception:
-				continue
 	return accepted
 
 
@@ -184,6 +235,7 @@ def click_cookie_banners(driver: WebDriver) -> int:
 			low = text.lower()
 			if any(h in text for h in COOKIE_BUTTON_HINTS) or any(k in low for k in ["accept", "agree", "consent"]):
 				try:
+					driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
 					el.click()
 					clicked += 1
 				except Exception:
@@ -567,17 +619,18 @@ def auto_fill_remaining(driver: WebDriver, *, skip_message: bool = True) -> int:
 			continue
 		seen_groups.add(name)
 		if _is_required(r):
-			_choose_first_radio_in_group(driver, r)
-			filled += 1
-	# Checkboxes: click required
+			if _choose_first_radio_in_group(driver, r):
+				filled += 1
+	# Checkboxes: required, and consent-like even if not marked required
 	cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
 	for cb in cbs:
-		if _is_required(cb) and not cb.is_selected():
-			try:
-				cb.click()
+		if cb.is_selected():
+			continue
+		required_flag = _is_required(cb)
+		meta = f"{cb.get_attribute('name') or ''} {cb.get_attribute('id') or ''} {cb.get_attribute('aria-label') or ''} {_label_text_for_element(driver, cb)}"
+		if required_flag or any(h in meta for h in CONSENT_HINTS):
+			if _checkbox_set_checked(driver, cb):
 				filled += 1
-			except Exception:
-				continue
 	if switched:
 		try:
 			driver.switch_to.default_content()
