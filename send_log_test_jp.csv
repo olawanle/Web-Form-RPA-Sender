@@ -1,0 +1,106 @@
+timestamp,company_name,inquiry_url,status,detail
+2025-09-05T09:12:55,（株）KINOBORI,"inquiry_url                    http://ki-nobori.com/
+inquiry_url    http://www.wish-reform.co.jp/inquiry/
+Name: 0, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）ＳＮＫ,"inquiry_url                         http://www.kk-snk.com/
+inquiry_url    https://www.yoshidatenso.jp/company#contact
+Name: 1, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）ＴＡＮＩＭＵＲＡ,"inquiry_url    http://www.tanimura-0929.com/information
+inquiry_url         https://www.reform-mio.com/inquiry/
+Name: 2, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）アーサ,"inquiry_url           http://www.a-sa.co.jp/
+inquiry_url    http://www.kuwaji.com/contact
+Name: 3, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）アーチ,"inquiry_url                  http://i-arch.info/
+inquiry_url    https://teruyasetubi.com/contact/
+Name: 4, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,(株)アクティブライフ・コネクション,"inquiry_url                 http://www.activelifeconnection.com/
+inquiry_url    http://taniguchiya.info/%E3%81%8A%E5%95%8F%E3%...
+Name: 5, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）アサヒ,"inquiry_url    http://www.asahi-itami.co.jp/index.php/about
+inquiry_url             http://www.okamoto-k.co.jp/contact/
+Name: 6, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）アップワーズ,"inquiry_url       http://upwards.co.jp/
+inquiry_url    https://ida-c.jp/contact
+Name: 7, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）イデア建築工房,"inquiry_url                 http://idea-kk.co.jp/
+inquiry_url    https://www.miwaarumi.com/#contact
+Name: 8, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）ウィルエナジー・ガステックス神戸,"inquiry_url                 http://www.gastex.net/
+inquiry_url    https://shichihuku-reform.com/form/
+Name: 9, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）ウノ,"inquiry_url                http://www.k-uno.jp/about/
+inquiry_url    https://terasu-y.co.jp/repair/contact/
+Name: 10, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）エネルギーステーション 神戸店,"inquiry_url             http://www.enesta.jp/
+inquiry_url    https://isshin-dou.com/contact
+Name: 11, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,(株)エルフォーハウジング L4HOUS,"inquiry_url                    http://www.elfor.jp/
+inquiry_url    https://www.okabousui.co.jp/contact/
+Name: 12, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）カナダ,"inquiry_url                               http://house100.co.jp/
+inquiry_url    http://www.athome.co.jp/atweb_static/athome/cu...
+Name: 13, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）クリエイト本社,"inquiry_url            http://www.create-t.co.jp/
+inquiry_url    https://www.lifeline-de.jp/contact
+Name: 14, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）コーヨー,"inquiry_url           http://www.koyo-c.net/
+inquiry_url    https://www.artisan-kobe.com/
+Name: 15, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）コトブキコーポレーション,"inquiry_url               http://kotobuki-cp.com/
+inquiry_url    https://www.nakayama-painting.com/
+Name: 16, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）サイエンスLDホーム,"inquiry_url          http://life-design-home.jp/
+inquiry_url    http://www.ota-kougyo.com/contact
+Name: 17, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:12:55,（株）サン・ガーデン,"inquiry_url             http://sungarden-kobe.jp/
+inquiry_url    http://www.nest-co.jp/contact.html
+Name: 18, dtype: object",failed,Object of type Series is not JSON serializable
+2025-09-05T09:14:07,（株）KINOBORI,http://www.wish-reform.co.jp/inquiry/,failed,Submit button not found
+2025-09-05T09:14:14,（株）ＳＮＫ,https://www.yoshidatenso.jp/company#contact,failed,Submit button not found
+2025-09-05T09:14:32,（株）ＴＡＮＩＭＵＲＡ,https://www.reform-mio.com/inquiry/,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:14:39,（株）アーサ,http://www.kuwaji.com/contact,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:14:47,（株）アーチ,https://teruyasetubi.com/contact/,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:14:56,(株)アクティブライフ・コネクション,http://taniguchiya.info/%E3%81%8A%E5%95%8F%E3%81%84%E5%90%88%E3%82%8F%E3%81%9B/,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:14:59,（株）アサヒ,http://www.okamoto-k.co.jp/contact/,failed,Submit button not found
+2025-09-05T09:15:19,（株）アップワーズ,https://ida-c.jp/contact,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:15:36,（株）イデア建築工房,https://www.miwaarumi.com/#contact,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:15:52,（株）ウィルエナジー・ガステックス神戸,https://shichihuku-reform.com/form/,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:16:24,（株）ウノ,https://terasu-y.co.jp/repair/contact/,submitted,
+2025-09-05T09:16:58,（株）エネルギーステーション 神戸店,https://isshin-dou.com/contact,submitted,
+2025-09-05T09:17:59,(株)エルフォーハウジング L4HOUS,https://www.okabousui.co.jp/contact/,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:18:11,（株）カナダ,http://www.athome.co.jp/atweb_static/athome/customer.html,failed,Submit button not found
+2025-09-05T09:19:11,（株）クリエイト本社,https://www.lifeline-de.jp/contact,failed,"Message: timeout: Timed out receiving message from renderer: 55.342
+  (Session info: chrome=139.0.7258.155)
+Stacktrace:
+0   chromedriver                        0x000000010fc96668 chromedriver + 5928552
+1   chromedriver                        0x000000010fc8dc0a chromedriver + 5893130
+2   chromedriver                        0x000000010f757e00 chromedriver + 429568
+3   chromedriver                        0x000000010f73fe12 chromedriver + 331282
+4   chromedriver                        0x000000010f73fb4b chromedriver + 330571
+5   chromedriver                        0x000000010f73da04 chromedriver + 322052
+6   chromedriver                        0x000000010f73e33f chromedriver + 324415
+7   chromedriver                        0x000000010f74cd83 chromedriver + 384387
+8   chromedriver                        0x000000010f76660d chromedriver + 488973
+9   chromedriver                        0x000000010f76cd0b chromedriver + 515339
+10  chromedriver                        0x000000010f73ea2b chromedriver + 326187
+11  chromedriver                        0x000000010f76628f chromedriver + 488079
+12  chromedriver                        0x000000010f7f751e chromedriver + 1082654
+13  chromedriver                        0x000000010f7cfe33 chromedriver + 921139
+14  chromedriver                        0x000000010f79c37b chromedriver + 709499
+15  chromedriver                        0x000000010f79d061 chromedriver + 712801
+16  chromedriver                        0x000000010fc540e0 chromedriver + 5656800
+17  chromedriver                        0x000000010fc57fa4 chromedriver + 5672868
+18  chromedriver                        0x000000010fc2f052 chromedriver + 5505106
+19  chromedriver                        0x000000010fc58a4f chromedriver + 5675599
+20  chromedriver                        0x000000010fc1e004 chromedriver + 5435396
+21  chromedriver                        0x000000010fc7ad88 chromedriver + 5815688
+22  chromedriver                        0x000000010fc7af50 chromedriver + 5816144
+23  chromedriver                        0x000000010fc8d7e1 chromedriver + 5892065
+24  libsystem_pthread.dylib             0x00007ff800e1d4e1 _pthread_start + 125
+25  libsystem_pthread.dylib             0x00007ff800e18f6b thread_start + 15
+"
+2025-09-05T09:19:26,（株）コーヨー,https://www.artisan-kobe.com/,failed,Submit button not found
+2025-09-05T09:19:33,（株）コトブキコーポレーション,https://www.nakayama-painting.com/,failed,Submit button not found
+2025-09-05T09:19:49,（株）サイエンスLDホーム,http://www.ota-kougyo.com/contact,captcha_skipped,CAPTCHA detected before fill
+2025-09-05T09:20:14,（株）サン・ガーデン,http://www.nest-co.jp/contact.html,failed,Submit button not found
