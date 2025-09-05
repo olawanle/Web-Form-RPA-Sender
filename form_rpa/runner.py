@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 from .ai_assist import suggest_selectors, generate_values
 from .browser import create_chrome_driver
 from .captcha import is_captcha_present
-from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit, detect_required_errors, collect_required_fields
+from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit, detect_required_errors, collect_required_fields, auto_fill_remaining
 from .lead_loader import load_leads, dedupe_against_log
 from .logging_utils import append_log
 from .quota import remaining_quota
@@ -190,6 +190,8 @@ def process_leads(
 					"message": message,
 				}
 				fill_fields(driver, values, auto_consent=auto_consent)
+				# Fill all remaining fields with placeholders except message
+				auto_fill_remaining(driver, skip_message=True)
 
 				if ai_assist_mode in ("always",):
 					html = driver.page_source

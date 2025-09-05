@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+import random
 import time
+from datetime import datetime
 from typing import Dict, Optional, Tuple, List
 
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -433,3 +435,152 @@ def wait_post_submit(driver: WebDriver, timeout: int = 10) -> None:
 		)
 	except TimeoutException:
 		pass
+
+
+def _infer_semantic(keywords: str, input_type: str, tag_name: str) -> str:
+	low = keywords.lower()
+	if any(k in low for k in ["mail", "email", "e-mail", "メール"]):
+		return "email"
+	if any(k in low for k in ["tel", "phone", "電話"]):
+		return "phone"
+	if any(k in low for k in ["zip", "postal", "郵便", "〒"]):
+		return "zip"
+	if any(k in low for k in ["addr", "住所", "所在地", "番地"]):
+		return "address"
+	if any(k in low for k in ["city", "市区町村"]):
+		return "city"
+	if any(k in low for k in ["pref", "都道府県", "県", "府", "都"]):
+		return "prefecture"
+	if any(k in low for k in ["company", "法人", "会社", "企業", "貴社", "御社", "店舗"]):
+		return "company"
+	if any(k in low for k in ["name", "氏名", "お名前", "担当"]):
+		return "name"
+	if any(k in low for k in ["subject", "件名", "題名"]):
+		return "subject"
+	if any(k in low for k in ["url", "website", "ウェブ", "サイト"]):
+		return "url"
+	if any(k in low for k in ["date", "日付", "年月日"]):
+		return "date"
+	if input_type in ["number", "range"]:
+		return "number"
+	if tag_name == "textarea":
+		return "textarea"
+	return "text"
+
+
+def _placeholder_for_semantic(semantic: str) -> str:
+	if semantic == "email":
+		return "info@example.com"
+	if semantic == "phone":
+		return "050-1234-5678"
+	if semantic == "zip":
+		return "650-0001"
+	if semantic == "address":
+		return "兵庫県神戸市中央区サンプル1-2-3"
+	if semantic == "city":
+		return "神戸市"
+	if semantic == "prefecture":
+		return "兵庫県"
+	if semantic == "company":
+		return "株式会社サンプル"
+	if semantic == "name":
+		return "山田 太郎"
+	if semantic == "subject":
+		return "お問い合わせ"
+	if semantic == "url":
+		return "https://example.com"
+	if semantic == "date":
+		return datetime.now().strftime("%Y-%m-%d")
+	if semantic == "number":
+		return str(random.randint(1, 9))
+	return "サンプル"
+
+
+def _is_message_like(el) -> bool:
+	meta = " ".join([
+		(el.get_attribute("name") or ""),
+		(el.get_attribute("id") or ""),
+		(el.get_attribute("placeholder") or ""),
+		(el.get_attribute("aria-label") or ""),
+		el.tag_name or "",
+	])
+	low = meta.lower()
+	if any(h.lower() in low for h in FIELD_HINTS["message"]):
+		return True
+	return el.tag_name.lower() == "textarea"
+
+
+def auto_fill_remaining(driver: WebDriver, *, skip_message: bool = True) -> int:
+	"""Fill all remaining empty or required fields with reasonable placeholders.
+	Returns number of fields filled.
+	"""
+	filled = 0
+	switched = switch_into_form_iframe_if_any(driver)
+	# Fill inputs and textareas
+	candidates = driver.find_elements(By.CSS_SELECTOR, "input, textarea")
+	for el in candidates:
+		try:
+			input_type = (el.get_attribute("type") or "text").lower()
+			tag = el.tag_name.lower()
+			if tag == "input" and input_type in ["hidden", "file", "submit", "button", "image", "reset"]:
+				continue
+			if skip_message and _is_message_like(el):
+				# preserve message content set by template
+				continue
+			current = (el.get_attribute("value") or "").strip()
+			if current and not _is_required(el):
+				continue
+			keywords = " ".join([
+				(el.get_attribute("name") or ""),
+				(el.get_attribute("id") or ""),
+				(el.get_attribute("placeholder") or ""),
+				(el.get_attribute("aria-label") or ""),
+			])
+			semantic = _infer_semantic(keywords, input_type, tag)
+			value = _placeholder_for_semantic(semantic)
+			try:
+				el.clear()
+				el.send_keys(value)
+				_dispatch_set_value(driver, el, value)
+				filled += 1
+			except Exception:
+				try:
+					_dispatch_set_value(driver, el, value)
+					filled += 1
+				except Exception:
+					pass
+		except Exception:
+			continue
+	# Selects
+	for select in _find_selects(driver):
+		try:
+			_choose_select_option(select)
+			filled += 1
+		except Exception:
+			continue
+	# Radios: choose first in each group if required
+	radios = driver.find_elements(By.CSS_SELECTOR, "input[type=radio]")
+	seen_groups = set()
+	for r in radios:
+		name = r.get_attribute("name") or ""
+		if name in seen_groups:
+			continue
+		seen_groups.add(name)
+		if _is_required(r):
+			_choose_first_radio_in_group(driver, r)
+			filled += 1
+	# Checkboxes: click required
+	cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
+	for cb in cbs:
+		if _is_required(cb) and not cb.is_selected():
+			try:
+				cb.click()
+				filled += 1
+			except Exception:
+				continue
+	if switched:
+		try:
+			driver.switch_to.default_content()
+		except Exception:
+			pass
+	return filled
