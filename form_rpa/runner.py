@@ -8,7 +8,7 @@ from typing import Callable, Dict, Optional
 
 from .browser import create_chrome_driver
 from .captcha import is_captcha_present
-from .form_filler import fill_fields, click_submit, wait_post_submit
+from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit
 from .lead_loader import load_leads, dedupe_against_log
 from .logging_utils import append_log
 from .quota import remaining_quota
@@ -36,24 +36,11 @@ def process_leads(
 	sleep_max: float = 3.0,
 	preview: bool = False,
 	screenshot_dir: Optional[str] = None,
+	auto_consent: bool = True,
+	use_multistep_submit: bool = True,
 	on_progress: Optional[ProgressCallback] = None,
 ) -> None:
-	"""Run the end-to-end lead processing workflow.
-
-	Args:
-		input_path: Path to CSV/Excel of leads.
-		template_path: Path to Jinja2 message template.
-		log_path: Output log CSV path.
-		max_per_day: Daily submission limit.
-		start_time: 'YYYY-MM-DD HH:MM' or 'HH:MM' local time; waits until then.
-		headless: Whether to run Chrome in headless mode.
-		skip_on_captcha: If True, skip pages with CAPTCHA protection.
-		sleep_min: Min seconds between leads.
-		sleep_max: Max seconds between leads.
-		preview: If True, do not submit the form; capture screenshots only.
-		screenshot_dir: If provided, save screenshots per step to this directory.
-		on_progress: Optional callback invoked per lead with a dict payload.
-	"""
+	"""Run the end-to-end lead processing workflow."""
 	def _emit(event: Dict[str, str]) -> None:
 		if on_progress:
 			on_progress(event)
@@ -131,7 +118,7 @@ def process_leads(
 					"subject": row.get("subject", ""),
 					"message": message,
 				}
-				fill_fields(driver, values)
+				fill_fields(driver, values, auto_consent=auto_consent)
 				shot_filled = ""
 				if screenshot_dir:
 					shot_filled = os.path.join(screenshot_dir, f"{lead_prefix}_filled.png")
@@ -149,7 +136,10 @@ def process_leads(
 					time.sleep(random.uniform(sleep_min, sleep_max))
 					continue
 
-				clicked = click_submit(driver)
+				if use_multistep_submit:
+					clicked = multi_step_submit(driver)
+				else:
+					clicked = click_submit(driver)
 				if not clicked:
 					append_log(log_path, {
 						"company_name": company_name,

@@ -18,6 +18,8 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--sleep-max", type=float, default=3.0, help="Max seconds between sends")
 	p.add_argument("--preview", action="store_true", help="Preview mode: fill but do not submit")
 	p.add_argument("--screenshot-dir", default=None, help="Directory to save screenshots")
+	p.add_argument("--no-consent", action="store_true", help="Do not auto-accept privacy/terms checkboxes")
+	p.add_argument("--no-multistep", action="store_true", help="Disable multi-step confirm→send handling")
 	return p.parse_args()
 
 
@@ -35,6 +37,8 @@ def run() -> None:
 		sleep_max=args.sleep_max,
 		preview=args.preview,
 		screenshot_dir=args.screenshot_dir,
+		auto_consent=(not args.no_consent),
+		use_multistep_submit=(not args.no_multistep),
 	)
 
 

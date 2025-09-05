@@ -6,29 +6,51 @@ from typing import Dict, Optional, Tuple, List
 
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 
 FIELD_HINTS = {
-	"name": ["name", "your-name", "fullname", "full-name", "contact", "お名前", "氏名"],
-	"company": ["company", "organization", "corp", "company-name", "会社", "御社", "貴社"],
-	"email": ["email", "mail", "e-mail", "your-email", "メール"],
-	"phone": ["phone", "tel", "telephone", "携帯", "電話"],
-	"subject": ["subject", "件名", "題名"],
-	"message": ["message", "inquiry", "contact", "body", "comment", "お問い合わせ", "内容", "本文"],
+	"name": [
+		"name", "your-name", "fullname", "full-name", "contact",
+		"お名前", "氏名", "担当者", "担当者名", "ご担当者",
+	],
+	"company": [
+		"company", "organization", "corp", "company-name",
+		"会社名", "御社名", "貴社名", "法人名", "店舗名",
+	],
+	"email": [
+		"email", "mail", "e-mail", "your-email",
+		"メール", "メールアドレス",
+	],
+	"phone": [
+		"phone", "tel", "telephone",
+		"携帯", "電話", "電話番号",
+	],
+	"subject": [
+		"subject",
+		"件名", "題名",
+	],
+	"message": [
+		"message", "inquiry", "contact", "body", "comment",
+		"お問い合わせ", "お問い合わせ内容", "内容", "本文", "ご用件", "ご質問",
+	],
 }
 
 SUBMIT_HINTS = [
-	"submit", "send", "送信", "確認", "confirm", "お問い合わせ送信"
+	"submit", "send", "送信", "確認", "confirm", "お問い合わせ送信", "確定"
+]
+
+CONSENT_HINTS = [
+	"同意", "プライバシー", "個人情報", "利用規約", "規約", "個人情報の取り扱い", "個人情報保護方針",
 ]
 
 
 def _find_by_label_association(driver: WebDriver, keywords: List[str]):
 	labels = driver.find_elements(By.TAG_NAME, "label")
 	for label in labels:
-		text = (label.text or "").lower()
+		text = (label.text or "").strip().lower()
 		if any(k in text for k in keywords):
 			for_attr = label.get_attribute("for")
 			if for_attr:
@@ -63,6 +85,93 @@ def _find_input_like(driver: WebDriver, keywords: List[str], input_types=("text"
 	return None
 
 
+def _find_selects(driver: WebDriver) -> List[Select]:
+	select_els = driver.find_elements(By.TAG_NAME, "select")
+	selects: List[Select] = []
+	for el in select_els:
+		try:
+			selects.append(Select(el))
+		except Exception:
+			continue
+	return selects
+
+
+def _is_required(el) -> bool:
+	req = (el.get_attribute("required") or "").lower()
+	aria = (el.get_attribute("aria-required") or "").lower()
+	classes = (el.get_attribute("class") or "").lower()
+	return req == "true" or aria == "true" or "required" in classes
+
+
+def _choose_select_option(select: Select) -> bool:
+	# Choose first non-empty option if field is required and nothing is selected
+	try:
+		options = select.options
+		for opt in options:
+			text = (opt.text or "").strip()
+			val = (opt.get_attribute("value") or "").strip()
+			if text and val:
+				select.select_by_value(val)
+				return True
+	except Exception:
+		return False
+	return False
+
+
+def _choose_first_radio_in_group(driver: WebDriver, input_el) -> bool:
+	name = input_el.get_attribute("name") or ""
+	if not name:
+		return False
+	group = driver.find_elements(By.CSS_SELECTOR, f"input[type=radio][name='{name}']")
+	for el in group:
+		try:
+			el.click()
+			return True
+		except Exception:
+			continue
+	return False
+
+
+def accept_consents(driver: WebDriver, auto_consent: bool) -> int:
+	if not auto_consent:
+		return 0
+	accepted = 0
+	# Click checkboxes with consent-related labels
+	labels = driver.find_elements(By.TAG_NAME, "label")
+	for label in labels:
+		text = (label.text or "")
+		if not text:
+			continue
+		low = text.lower()
+		if any(h in text for h in CONSENT_HINTS) or any(h in low for h in ["privacy", "policy", "terms", "agree"]):
+			for_attr = label.get_attribute("for")
+			if for_attr:
+				try:
+					cb = driver.find_element(By.ID, for_attr)
+					if cb.get_attribute("type") == "checkbox" and not cb.is_selected():
+						cb.click()
+						accepted += 1
+				except Exception:
+					continue
+	# Fallback: unchecked consent-like checkboxes without labels
+	cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
+	for cb in cbs:
+		if cb.is_selected():
+			continue
+		name = (cb.get_attribute("name") or "")
+		id_attr = (cb.get_attribute("id") or "")
+		aria = (cb.get_attribute("aria-label") or "")
+		meta = f"{name} {id_attr} {aria}"
+		low = meta.lower()
+		if any(h in meta for h in CONSENT_HINTS) or any(k in low for k in ["privacy", "terms", "agree", "policy"]):
+			try:
+				cb.click()
+				accepted += 1
+			except Exception:
+				continue
+	return accepted
+
+
 def find_fields(driver: WebDriver) -> Dict[str, Optional[object]]:
 	fields = {
 		"name": _find_input_like(driver, FIELD_HINTS["name"], input_types=("text")),
@@ -75,7 +184,7 @@ def find_fields(driver: WebDriver) -> Dict[str, Optional[object]]:
 	return fields
 
 
-def fill_fields(driver: WebDriver, values: Dict[str, str]) -> Dict[str, bool]:
+def fill_fields(driver: WebDriver, values: Dict[str, str], *, auto_selects: bool = True, auto_radios: bool = True, auto_consent: bool = False) -> Dict[str, bool]:
 	fields = find_fields(driver)
 	result = {}
 	for key, element in fields.items():
@@ -89,6 +198,21 @@ def fill_fields(driver: WebDriver, values: Dict[str, str]) -> Dict[str, bool]:
 			except Exception:
 				filled = False
 		result[key] = filled
+
+	# Optionally choose selects/radios for required fields
+	if auto_selects:
+		for select in _find_selects(driver):
+			el = select._el
+			if _is_required(el):
+				_choose_select_option(select)
+	if auto_radios:
+		radios = driver.find_elements(By.CSS_SELECTOR, "input[type=radio]")
+		for r in radios:
+			if _is_required(r):
+				_choose_first_radio_in_group(driver, r)
+
+	# Optionally accept consents
+	accept_consents(driver, auto_consent=auto_consent)
 	return result
 
 
@@ -102,7 +226,6 @@ def _elements_with_text(driver: WebDriver, selector: str, hints: List[str]):
 
 
 def _submit_enclosing_form(driver: WebDriver) -> bool:
-	# If there is exactly one form, submit it
 	forms = driver.find_elements(By.TAG_NAME, "form")
 	if len(forms) == 1:
 		try:
@@ -110,7 +233,6 @@ def _submit_enclosing_form(driver: WebDriver) -> bool:
 			return True
 		except Exception:
 			pass
-	# Otherwise, find a form that contains typical fields
 	fields = find_fields(driver)
 	candidates = [el for el in fields.values() if el is not None]
 	for el in candidates:
@@ -124,7 +246,6 @@ def _submit_enclosing_form(driver: WebDriver) -> bool:
 
 
 def click_submit(driver: WebDriver) -> bool:
-	# Try common submit-like elements
 	selector_sets = [
 		("button[type=submit], input[type=submit]", SUBMIT_HINTS),
 		("button, input[type=button]", SUBMIT_HINTS),
@@ -134,12 +255,40 @@ def click_submit(driver: WebDriver) -> bool:
 	for selector, hints in selector_sets:
 		for el in _elements_with_text(driver, selector, [h.lower() for h in hints]):
 			try:
+				driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
 				el.click()
 				return True
 			except Exception:
 				continue
-	# Fallback: submit the enclosing form
 	if _submit_enclosing_form(driver):
+		return True
+	return False
+
+
+def multi_step_submit(driver: WebDriver, timeout_first: int = 6, timeout_second: int = 6) -> bool:
+	# First click
+	clicked = click_submit(driver)
+	if not clicked:
+		return False
+	try:
+		WebDriverWait(driver, timeout_first).until(
+			lambda d: "確認" in d.page_source or "confirm" in d.page_source.lower() or "内容確認" in d.page_source
+		)
+		# On confirm page, try to find final send
+		selector_sets = [
+			("button[type=submit], input[type=submit]", ["送信", "submit", "確定", "send"]),
+			("button, input[type=button]", ["送信", "確定", "send"]),
+		]
+		for selector, hints in selector_sets:
+			for el in _elements_with_text(driver, selector, [h.lower() for h in hints]):
+				try:
+					driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
+					el.click()
+					return True
+				except Exception:
+					continue
+	except TimeoutException:
+		# No explicit confirm step detected; rely on first click
 		return True
 	return False
 

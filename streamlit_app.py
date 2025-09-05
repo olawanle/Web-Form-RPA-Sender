@@ -21,6 +21,8 @@ def main():
 		headless = st.checkbox("Headless browser", value=True)
 		preview = st.checkbox("Preview (no submit)", value=True)
 		skip_captcha = st.checkbox("Skip when CAPTCHA detected", value=True)
+		auto_consent = st.checkbox("Auto-accept privacy/terms (consent)", value=True)
+		use_multistep = st.checkbox("Handle confirm→send multi-step", value=True)
 		sleep_min = st.number_input("Min sleep (s)", min_value=0.0, value=1.0, step=0.1)
 		sleep_max = st.number_input("Max sleep (s)", min_value=0.0, value=3.0, step=0.1)
 
@@ -92,6 +94,8 @@ def main():
 				sleep_min=float(sleep_min),
 				sleep_max=float(sleep_max),
 				screenshot_dir=shot_dir,
+				auto_consent=bool(auto_consent),
+				use_multistep_submit=bool(use_multistep),
 				on_progress=on_progress,
 			)
 
