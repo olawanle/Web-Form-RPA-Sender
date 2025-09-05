@@ -27,7 +27,7 @@ def main():
 		sleep_max = st.number_input("Max sleep (s)", min_value=0.0, value=3.0, step=0.1)
 
 		st.subheader("AI Assist (Optional)")
-		ai_mode = st.selectbox("AI Assist Mode", options=["off", "failure_only", "always"], index=0)
+		ai_mode = st.selectbox("AI Assist Mode", options=["off", "failure_only", "always"], index=2)
 		ai_fill_required = st.checkbox("AI: fill missing required fields on error", value=True)
 		openrouter_api_key = st.text_input("OpenRouter API Key", value=os.getenv("OPENROUTER_API_KEY", ""), type="password")
 

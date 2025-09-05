@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--screenshot-dir", default=None, help="Directory to save screenshots")
 	p.add_argument("--no-consent", action="store_true", help="Do not auto-accept privacy/terms checkboxes")
 	p.add_argument("--no-multistep", action="store_true", help="Disable multi-step confirm→send handling")
-	p.add_argument("--ai-assist", choices=["off", "failure_only", "always"], default="off", help="Use AI to infer selectors")
+	p.add_argument("--ai-assist", choices=["off", "failure_only", "always"], default="always", help="Use AI to infer selectors")
 	p.add_argument("--openrouter-api-key", default=None, help="OpenRouter API key (or set OPENROUTER_API_KEY env var)")
 	p.add_argument("--ai-fill-required", action="store_true", help="Use AI to generate values for required fields on validation error")
 	return p.parse_args()

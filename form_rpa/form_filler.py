@@ -46,6 +46,162 @@ CONSENT_HINTS = [
 	"同意", "プライバシー", "個人情報", "利用規約", "規約", "個人情報の取り扱い", "個人情報保護方針",
 ]
 
+ERROR_HINTS_REQUIRED = [
+	"必須", "必須項目", "入力してください", "未入力", "required", "is required",
+]
+
+CONTACT_LINK_HINTS = [
+	"お問い合わせ", "お問合せ", "問合せ", "コンタクト", "資料請求", "お見積り", "contact", "inquiry"
+]
+
+COOKIE_BUTTON_HINTS = [
+	"同意", "許可", "同意する", "同意して続行", "Accept", "I agree", "許可する", "同意して受け入れる"
+]
+
+
+def detect_required_errors(driver: WebDriver) -> bool:
+	page = driver.page_source
+	low = page.lower()
+	if any(h in page for h in ERROR_HINTS_REQUIRED) or any(h in low for h in ["required", "please enter"]):
+		return True
+	try:
+		invalid_count = driver.execute_script("return document.querySelectorAll(':invalid').length")
+		return bool(invalid_count and invalid_count > 0)
+	except Exception:
+		return False
+
+
+def collect_required_fields(driver: WebDriver) -> List[Dict[str, str]]:
+	fields: List[Dict[str, str]] = []
+	candidates = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select")
+	for el in candidates:
+		try:
+			required = _is_required(el)
+			if not required:
+				continue
+			key = (el.get_attribute("name") or el.get_attribute("id") or "field")
+			item = {
+				"key": key,
+				"label": "",
+				"placeholder": el.get_attribute("placeholder") or "",
+				"name": el.get_attribute("name") or "",
+				"id": el.get_attribute("id") or "",
+				"type": el.get_attribute("type") or el.tag_name,
+			}
+			try:
+				label = el.find_element(By.XPATH, "ancestor::label")
+				if label.text:
+					item["label"] = label.text.strip()
+			except Exception:
+				pass
+			fid = el.get_attribute("id")
+			if fid:
+				labels = driver.find_elements(By.CSS_SELECTOR, f"label[for='{fid}']")
+				for lb in labels:
+					if lb.text:
+						item["label"] = lb.text.strip()
+			fields.append(item)
+		except Exception:
+			continue
+	return fields
+
+
+def _is_required(el) -> bool:
+	req = (el.get_attribute("required") or "").lower()
+	aria = (el.get_attribute("aria-required") or "").lower()
+	classes = (el.get_attribute("class") or "").lower()
+	return req == "true" or aria == "true" or "required" in classes
+
+
+def _dispatch_set_value(driver: WebDriver, element, value: str) -> None:
+	# Set value and dispatch input/change for React/Vue-controlled inputs
+	try:
+		driver.execute_script(
+			"""
+			const el = arguments[0];
+			const val = arguments[1];
+			if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+				el.focus();
+				el.value = val;
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			} else {
+				try { el.value = val; } catch (e) {}
+			}
+			""",
+			element,
+			value,
+		)
+	except Exception:
+		pass
+
+
+def accept_consents(driver: WebDriver, auto_consent: bool) -> int:
+	if not auto_consent:
+		return 0
+	accepted = 0
+	labels = driver.find_elements(By.TAG_NAME, "label")
+	for label in labels:
+		text = (label.text or "")
+		if not text:
+			continue
+		low = text.lower()
+		if any(h in text for h in CONSENT_HINTS) or any(h in low for h in ["privacy", "policy", "terms", "agree"]):
+			for_attr = label.get_attribute("for")
+			if for_attr:
+				try:
+					cb = driver.find_element(By.ID, for_attr)
+					if cb.get_attribute("type") == "checkbox" and not cb.is_selected():
+						cb.click()
+						accepted += 1
+				except Exception:
+					continue
+	cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
+	for cb in cbs:
+		if cb.is_selected():
+			continue
+		name = (cb.get_attribute("name") or "")
+		id_attr = (cb.get_attribute("id") or "")
+		aria = (cb.get_attribute("aria-label") or "")
+		meta = f"{name} {id_attr} {aria}"
+		low = meta.lower()
+		if any(h in meta for h in CONSENT_HINTS) or any(k in low for k in ["privacy", "terms", "agree", "policy"]):
+			try:
+				cb.click()
+				accepted += 1
+			except Exception:
+				continue
+	return accepted
+
+
+def click_cookie_banners(driver: WebDriver) -> int:
+	clicked = 0
+	for sel in ["button", "[role=button]", "a"]:
+		for el in driver.find_elements(By.CSS_SELECTOR, sel):
+			text = (el.text or "").strip()
+			low = text.lower()
+			if any(h in text for h in COOKIE_BUTTON_HINTS) or any(k in low for k in ["accept", "agree", "consent"]):
+				try:
+					el.click()
+					clicked += 1
+				except Exception:
+					continue
+	return clicked
+
+
+def click_contact_entry_link(driver: WebDriver) -> bool:
+	links = driver.find_elements(By.CSS_SELECTOR, "a[href]")
+	for a in links:
+		text = (a.text or "").strip()
+		low = text.lower()
+		if any(h in text for h in CONTACT_LINK_HINTS) or any(k in low for k in ["contact", "inquiry"]):
+			try:
+				a.click()
+				return True
+			except Exception:
+				continue
+	return False
+
 
 def _find_by_label_association(driver: WebDriver, keywords: List[str]):
 	labels = driver.find_elements(By.TAG_NAME, "label")
@@ -63,7 +219,6 @@ def _find_by_label_association(driver: WebDriver, keywords: List[str]):
 
 def _find_input_like(driver: WebDriver, keywords: List[str], input_types=("text", "email", "tel")):
 	kw = [k.lower() for k in keywords]
-	# Try label association first
 	el = _find_by_label_association(driver, kw)
 	if el is not None:
 		return el
@@ -96,15 +251,7 @@ def _find_selects(driver: WebDriver) -> List[Select]:
 	return selects
 
 
-def _is_required(el) -> bool:
-	req = (el.get_attribute("required") or "").lower()
-	aria = (el.get_attribute("aria-required") or "").lower()
-	classes = (el.get_attribute("class") or "").lower()
-	return req == "true" or aria == "true" or "required" in classes
-
-
 def _choose_select_option(select: Select) -> bool:
-	# Choose first non-empty option if field is required and nothing is selected
 	try:
 		options = select.options
 		for opt in options:
@@ -132,44 +279,22 @@ def _choose_first_radio_in_group(driver: WebDriver, input_el) -> bool:
 	return False
 
 
-def accept_consents(driver: WebDriver, auto_consent: bool) -> int:
-	if not auto_consent:
-		return 0
-	accepted = 0
-	# Click checkboxes with consent-related labels
-	labels = driver.find_elements(By.TAG_NAME, "label")
-	for label in labels:
-		text = (label.text or "")
-		if not text:
-			continue
-		low = text.lower()
-		if any(h in text for h in CONSENT_HINTS) or any(h in low for h in ["privacy", "policy", "terms", "agree"]):
-			for_attr = label.get_attribute("for")
-			if for_attr:
-				try:
-					cb = driver.find_element(By.ID, for_attr)
-					if cb.get_attribute("type") == "checkbox" and not cb.is_selected():
-						cb.click()
-						accepted += 1
-				except Exception:
-					continue
-	# Fallback: unchecked consent-like checkboxes without labels
-	cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
-	for cb in cbs:
-		if cb.is_selected():
-			continue
-		name = (cb.get_attribute("name") or "")
-		id_attr = (cb.get_attribute("id") or "")
-		aria = (cb.get_attribute("aria-label") or "")
-		meta = f"{name} {id_attr} {aria}"
-		low = meta.lower()
-		if any(h in meta for h in CONSENT_HINTS) or any(k in low for k in ["privacy", "terms", "agree", "policy"]):
+def switch_into_form_iframe_if_any(driver: WebDriver) -> bool:
+	iframes = driver.find_elements(By.TAG_NAME, "iframe")
+	for i, frame in enumerate(iframes):
+		try:
+			driver.switch_to.frame(frame)
+			# Form detectable?
+			if driver.find_elements(By.CSS_SELECTOR, "input, textarea, select"):
+				return True
+			# Not a form iframe, go back
+			driver.switch_to.default_content()
+		except Exception:
 			try:
-				cb.click()
-				accepted += 1
+				driver.switch_to.default_content()
 			except Exception:
-				continue
-	return accepted
+				pass
+	return False
 
 
 def find_fields(driver: WebDriver) -> Dict[str, Optional[object]]:
@@ -185,6 +310,8 @@ def find_fields(driver: WebDriver) -> Dict[str, Optional[object]]:
 
 
 def fill_fields(driver: WebDriver, values: Dict[str, str], *, auto_selects: bool = True, auto_radios: bool = True, auto_consent: bool = False) -> Dict[str, bool]:
+	# Try entering into a form iframe if present
+	switched = switch_into_form_iframe_if_any(driver)
 	fields = find_fields(driver)
 	result = {}
 	for key, element in fields.items():
@@ -194,12 +321,16 @@ def fill_fields(driver: WebDriver, values: Dict[str, str], *, auto_selects: bool
 			try:
 				element.clear()
 				element.send_keys(value)
+				_dispatch_set_value(driver, element, value)
 				filled = True
 			except Exception:
-				filled = False
+				try:
+					_dispatch_set_value(driver, element, value)
+					filled = True
+				except Exception:
+					filled = False
 		result[key] = filled
 
-	# Optionally choose selects/radios for required fields
 	if auto_selects:
 		for select in _find_selects(driver):
 			el = select._el
@@ -211,8 +342,13 @@ def fill_fields(driver: WebDriver, values: Dict[str, str], *, auto_selects: bool
 			if _is_required(r):
 				_choose_first_radio_in_group(driver, r)
 
-	# Optionally accept consents
 	accept_consents(driver, auto_consent=auto_consent)
+	# Exit iframe to restore context
+	if switched:
+		try:
+			driver.switch_to.default_content()
+		except Exception:
+			pass
 	return result
 
 
@@ -266,7 +402,6 @@ def click_submit(driver: WebDriver) -> bool:
 
 
 def multi_step_submit(driver: WebDriver, timeout_first: int = 6, timeout_second: int = 6) -> bool:
-	# First click
 	clicked = click_submit(driver)
 	if not clicked:
 		return False
@@ -274,7 +409,6 @@ def multi_step_submit(driver: WebDriver, timeout_first: int = 6, timeout_second:
 		WebDriverWait(driver, timeout_first).until(
 			lambda d: "確認" in d.page_source or "confirm" in d.page_source.lower() or "内容確認" in d.page_source
 		)
-		# On confirm page, try to find final send
 		selector_sets = [
 			("button[type=submit], input[type=submit]", ["送信", "submit", "確定", "send"]),
 			("button, input[type=button]", ["送信", "確定", "send"]),
@@ -288,7 +422,6 @@ def multi_step_submit(driver: WebDriver, timeout_first: int = 6, timeout_second:
 				except Exception:
 					continue
 	except TimeoutException:
-		# No explicit confirm step detected; rely on first click
 		return True
 	return False
 
@@ -300,57 +433,3 @@ def wait_post_submit(driver: WebDriver, timeout: int = 10) -> None:
 		)
 	except TimeoutException:
 		pass
-
-ERROR_HINTS_REQUIRED = [
-	"必須", "必須項目", "入力してください", "未入力", "required", "is required",
-]
-
-
-def detect_required_errors(driver: WebDriver) -> bool:
-	page = driver.page_source
-	low = page.lower()
-	if any(h in page for h in ERROR_HINTS_REQUIRED) or any(h in low for h in ["required", "please enter"]):
-		return True
-	# Check for HTML5 validation bubbles by checking :invalid elements count (best-effort)
-	try:
-		invalid_count = driver.execute_script("return document.querySelectorAll(':invalid').length")
-		return bool(invalid_count and invalid_count > 0)
-	except Exception:
-		return False
-
-
-def collect_required_fields(driver: WebDriver) -> List[Dict[str, str]]:
-	fields: List[Dict[str, str]] = []
-	candidates = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select")
-	for el in candidates:
-		try:
-			required = _is_required(el)
-			if not required:
-				continue
-			key = (el.get_attribute("name") or el.get_attribute("id") or "field")
-			item = {
-				"key": key,
-				"label": "",
-				"placeholder": el.get_attribute("placeholder") or "",
-				"name": el.get_attribute("name") or "",
-				"id": el.get_attribute("id") or "",
-				"type": el.get_attribute("type") or el.tag_name,
-			}
-			# Try to find associated label text
-			try:
-				label = el.find_element(By.XPATH, "ancestor::label")
-				if label.text:
-					item["label"] = label.text.strip()
-			except Exception:
-				pass
-			# label[for=id]
-			fid = el.get_attribute("id")
-			if fid:
-				labels = driver.find_elements(By.CSS_SELECTOR, f"label[for='{fid}']")
-				for lb in labels:
-					if lb.text:
-						item["label"] = lb.text.strip()
-			fields.append(item)
-		except Exception:
-			continue
-	return fields

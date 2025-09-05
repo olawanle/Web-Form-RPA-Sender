@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+send_log*.csv
+screenshots/
+shots_ai/

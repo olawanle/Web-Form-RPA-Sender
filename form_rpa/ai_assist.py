@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 from typing import Dict, List, Optional
 
+from dotenv import load_dotenv
 from openai import OpenAI
 
 
+load_dotenv()
 DEFAULT_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 OPENROUTER_BASE = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 

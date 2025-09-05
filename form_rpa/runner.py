@@ -98,7 +98,7 @@ def process_leads(
 	screenshot_dir: Optional[str] = None,
 	auto_consent: bool = True,
 	use_multistep_submit: bool = True,
-	ai_assist_mode: str = "off",  # off | failure_only | always
+	ai_assist_mode: str = "always",  # default always-on
 	openrouter_api_key: Optional[str] = None,
 	ai_fill_required: bool = True,
 	on_progress: Optional[ProgressCallback] = None,
