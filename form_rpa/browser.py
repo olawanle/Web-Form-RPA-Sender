@@ -19,6 +19,18 @@ def create_chrome_driver(headless: bool = True) -> webdriver.Chrome:
 	options.add_argument("--disable-blink-features=AutomationControlled")
 	options.add_experimental_option("excludeSwitches", ["enable-automation"]) 
 	options.add_experimental_option("useAutomationExtension", False)
+	options.add_argument("--disable-extensions")
+	options.add_argument("--disable-popup-blocking")
+	options.add_argument("--lang=ja-JP")
+	options.add_argument("--accept-lang=ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7")
+	options.add_argument(
+		"--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0 Safari/537.36"
+	)
+	prefs = {
+		"credentials_enable_service": False,
+		"profile.password_manager_enabled": False,
+	}
+	options.add_experimental_option("prefs", prefs)
 
 	service = ChromeService(ChromeDriverManager().install())
 	driver = webdriver.Chrome(service=service, options=options)

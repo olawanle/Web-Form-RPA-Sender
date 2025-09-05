@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 from typing import Callable, Dict, Optional
 
+from selenium.common.exceptions import WebDriverException
+
 from .browser import create_chrome_driver
 from .captcha import is_captcha_present
 from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit
@@ -22,6 +24,19 @@ def _sanitize_filename(text: str) -> str:
 	bad = "<>:\\\"/|?*\n\r\t"
 	out = "".join(ch if ch not in bad else "_" for ch in (text or "")).strip()
 	return out[:80] or "lead"
+
+
+def _wait_dom_ready(driver, timeout: int = 15):
+	start = time.time()
+	while time.time() - start < timeout:
+		try:
+			state = driver.execute_script("return document.readyState")
+			if state in ("interactive", "complete"):
+				return True
+		except WebDriverException:
+			return False
+		time.sleep(0.2)
+	return False
 
 
 def process_leads(
@@ -92,7 +107,16 @@ def process_leads(
 			}
 			lead_prefix = f"{count+1:03d}_" + _sanitize_filename(company_name)
 			try:
-				driver.get(inquiry_url)
+				try:
+					driver.get(inquiry_url)
+				except WebDriverException:
+					# Recreate driver on navigation crash
+					driver.quit()
+					driver = create_chrome_driver(headless=headless)
+					driver.get(inquiry_url)
+
+				_wait_dom_ready(driver, timeout=15)
+
 				shot_loaded = ""
 				if screenshot_dir:
 					shot_loaded = os.path.join(screenshot_dir, f"{lead_prefix}_loaded.png")
@@ -136,10 +160,7 @@ def process_leads(
 					time.sleep(random.uniform(sleep_min, sleep_max))
 					continue
 
-				if use_multistep_submit:
-					clicked = multi_step_submit(driver)
-				else:
-					clicked = click_submit(driver)
+				clicked = multi_step_submit(driver) if use_multistep_submit else click_submit(driver)
 				if not clicked:
 					append_log(log_path, {
 						"company_name": company_name,
@@ -185,4 +206,7 @@ def process_leads(
 				})
 				_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": str(e)})
 	finally:
-		driver.quit()
+		try:
+			driver.quit()
+		except Exception:
+			pass
