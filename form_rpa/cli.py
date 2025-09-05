@@ -12,7 +12,9 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--log", default="send_log.csv", help="Path to output log CSV")
 	p.add_argument("--max-per-day", type=int, default=500, help="Daily send limit")
 	p.add_argument("--start-time", default=None, help="Start time 'YYYY-MM-DD HH:MM' or 'HH:MM'")
-	p.add_argument("--headless", action="store_true", help="Run headless Chrome")
+	p.add_argument("--headless", action="store_true", help="Run headless browser")
+	p.add_argument("--browser", choices=["auto", "chrome", "firefox"], default="auto", help="Browser to use")
+	p.add_argument("--remote-url", default=None, help="Selenium Remote URL (e.g., http://localhost:4444/wd/hub)")
 	p.add_argument("--skip-on-captcha", action="store_true", help="Skip if CAPTCHA detected")
 	p.add_argument("--sleep-min", type=float, default=1.0, help="Min seconds between sends")
 	p.add_argument("--sleep-max", type=float, default=3.0, help="Max seconds between sends")
@@ -45,6 +47,8 @@ def run() -> None:
 		ai_assist_mode=args.ai_assist,
 		openrouter_api_key=args.openrouter_api_key,
 		ai_fill_required=bool(args.ai_fill_required),
+		browser=args.browser,
+		remote_url=args.remote_url,
 	)
 
 

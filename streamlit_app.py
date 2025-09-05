@@ -18,7 +18,9 @@ def main():
 		st.header("Options")
 		max_per_day = st.number_input("Daily cap", min_value=1, max_value=100000, value=500, step=1)
 		start_time = st.text_input("Start time (HH:MM or YYYY-MM-DD HH:MM)", value="")
+		browser = st.selectbox("Browser", options=["auto", "chrome", "firefox"], index=0)
 		headless = st.checkbox("Headless browser", value=True)
+		remote_url = st.text_input("Remote WebDriver URL (optional)", value=os.getenv("SELENIUM_REMOTE_URL", ""))
 		preview = st.checkbox("Preview (no submit)", value=True)
 		skip_captcha = st.checkbox("Skip when CAPTCHA detected", value=True)
 		auto_consent = st.checkbox("Auto-accept privacy/terms (consent)", value=True)
@@ -104,6 +106,8 @@ def main():
 				ai_assist_mode=ai_mode,
 				openrouter_api_key=(openrouter_api_key or None),
 				ai_fill_required=bool(ai_fill_required),
+				browser=browser,
+				remote_url=(remote_url or None),
 				on_progress=on_progress,
 			)
 

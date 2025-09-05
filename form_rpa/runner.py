@@ -10,7 +10,7 @@ from selenium.common.exceptions import WebDriverException, NoSuchElementExceptio
 from selenium.webdriver.common.by import By
 
 from .ai_assist import suggest_selectors, generate_values
-from .browser import create_chrome_driver
+from .browser import create_driver
 from .captcha import is_captcha_present
 from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit, detect_required_errors, collect_required_fields, auto_fill_remaining
 from .lead_loader import load_leads, dedupe_against_log
@@ -101,6 +101,8 @@ def process_leads(
 	ai_assist_mode: str = "always",  # default always-on
 	openrouter_api_key: Optional[str] = None,
 	ai_fill_required: bool = True,
+	browser: str = "auto",
+	remote_url: Optional[str] = None,
 	on_progress: Optional[ProgressCallback] = None,
 ) -> None:
 	"""Run the end-to-end lead processing workflow."""
@@ -138,7 +140,7 @@ def process_leads(
 		_emit({"event": "quota_reached"})
 		return
 
-	driver = create_chrome_driver(headless=headless)
+	driver = create_driver(browser=browser, headless=headless, remote_url=remote_url)
 	count = 0
 	try:
 		for idx, row in leads.iterrows():
@@ -159,7 +161,7 @@ def process_leads(
 					driver.get(inquiry_url)
 				except WebDriverException:
 					driver.quit()
-					driver = create_chrome_driver(headless=headless)
+					driver = create_driver(browser=browser, headless=headless, remote_url=remote_url)
 					driver.get(inquiry_url)
 
 				_wait_dom_ready(driver, timeout=15)
