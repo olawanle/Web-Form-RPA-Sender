@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import random
 import time
 from datetime import datetime
@@ -17,6 +18,12 @@ from .template_engine import render_template, build_salutation
 ProgressCallback = Callable[[Dict[str, str]], None]
 
 
+def _sanitize_filename(text: str) -> str:
+	bad = "<>:\\\"/|?*\n\r\t"
+	out = "".join(ch if ch not in bad else "_" for ch in (text or "")).strip()
+	return out[:80] or "lead"
+
+
 def process_leads(
 	input_path: str,
 	template_path: str,
@@ -27,6 +34,8 @@ def process_leads(
 	skip_on_captcha: bool = True,
 	sleep_min: float = 1.0,
 	sleep_max: float = 3.0,
+	preview: bool = False,
+	screenshot_dir: Optional[str] = None,
 	on_progress: Optional[ProgressCallback] = None,
 ) -> None:
 	"""Run the end-to-end lead processing workflow.
@@ -41,6 +50,8 @@ def process_leads(
 		skip_on_captcha: If True, skip pages with CAPTCHA protection.
 		sleep_min: Min seconds between leads.
 		sleep_max: Max seconds between leads.
+		preview: If True, do not submit the form; capture screenshots only.
+		screenshot_dir: If provided, save screenshots per step to this directory.
 		on_progress: Optional callback invoked per lead with a dict payload.
 	"""
 	def _emit(event: Dict[str, str]) -> None:
@@ -64,8 +75,10 @@ def process_leads(
 			if delta > 0:
 				time.sleep(delta)
 		except Exception:
-			# ignore invalid start time
 			return
+
+	if screenshot_dir:
+		os.makedirs(screenshot_dir, exist_ok=True)
 
 	_wait_until(start_time)
 	leads = load_leads(input_path)
@@ -78,7 +91,7 @@ def process_leads(
 	driver = create_chrome_driver(headless=headless)
 	count = 0
 	try:
-		for _, row in leads.iterrows():
+		for idx, row in leads.iterrows():
 			if count >= remaining:
 				break
 			inquiry_url = row["inquiry_url"]
@@ -90,8 +103,15 @@ def process_leads(
 				"company_name": company_name,
 				"contact_name": contact_name,
 			}
+			lead_prefix = f"{count+1:03d}_" + _sanitize_filename(company_name)
 			try:
 				driver.get(inquiry_url)
+				shot_loaded = ""
+				if screenshot_dir:
+					shot_loaded = os.path.join(screenshot_dir, f"{lead_prefix}_loaded.png")
+					driver.save_screenshot(shot_loaded)
+				_emit({"event": "loaded", "company_name": company_name, "url": inquiry_url, "screenshot": shot_loaded})
+
 				if skip_on_captcha and is_captcha_present(driver):
 					append_log(log_path, {
 						"company_name": company_name,
@@ -101,6 +121,7 @@ def process_leads(
 					})
 					_emit({"event": "captcha_skipped", "company_name": company_name, "url": inquiry_url})
 					continue
+
 				message = render_template(template_path, context)
 				values = {
 					"name": name_value,
@@ -111,6 +132,23 @@ def process_leads(
 					"message": message,
 				}
 				fill_fields(driver, values)
+				shot_filled = ""
+				if screenshot_dir:
+					shot_filled = os.path.join(screenshot_dir, f"{lead_prefix}_filled.png")
+					driver.save_screenshot(shot_filled)
+				_emit({"event": "filled", "company_name": company_name, "url": inquiry_url, "screenshot": shot_filled})
+
+				if preview:
+					append_log(log_path, {
+						"company_name": company_name,
+						"inquiry_url": inquiry_url,
+						"status": "preview",
+						"detail": "No submit (preview mode)"
+					})
+					count += 1
+					time.sleep(random.uniform(sleep_min, sleep_max))
+					continue
+
 				clicked = click_submit(driver)
 				if not clicked:
 					append_log(log_path, {
@@ -121,7 +159,14 @@ def process_leads(
 					})
 					_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": "submit_not_found"})
 					continue
+
 				wait_post_submit(driver)
+				shot_after = ""
+				if screenshot_dir:
+					shot_after = os.path.join(screenshot_dir, f"{lead_prefix}_after_submit.png")
+					driver.save_screenshot(shot_after)
+				_emit({"event": "submitted_wait", "company_name": company_name, "url": inquiry_url, "screenshot": shot_after})
+
 				if skip_on_captcha and is_captcha_present(driver):
 					append_log(log_path, {
 						"company_name": company_name,
@@ -131,6 +176,7 @@ def process_leads(
 					})
 					_emit({"event": "captcha_skipped", "company_name": company_name, "url": inquiry_url})
 					continue
+
 				append_log(log_path, {
 					"company_name": company_name,
 					"inquiry_url": inquiry_url,

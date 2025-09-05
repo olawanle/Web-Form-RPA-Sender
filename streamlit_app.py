@@ -10,7 +10,7 @@ from form_rpa.runner import process_leads
 
 
 def main():
-	st.set_page_config(page_title="Web Form RPA Sender", layout="centered")
+	st.set_page_config(page_title="Web Form RPA Sender", layout="wide")
 	st.title("Web Form RPA Sender")
 	st.markdown("Upload your leads file and message template, set options, and click Run.")
 
@@ -19,6 +19,7 @@ def main():
 		max_per_day = st.number_input("Daily cap", min_value=1, max_value=100000, value=500, step=1)
 		start_time = st.text_input("Start time (HH:MM or YYYY-MM-DD HH:MM)", value="")
 		headless = st.checkbox("Headless browser", value=True)
+		preview = st.checkbox("Preview (no submit)", value=True)
 		skip_captcha = st.checkbox("Skip when CAPTCHA detected", value=True)
 		sleep_min = st.number_input("Min sleep (s)", min_value=0.0, value=1.0, step=0.1)
 		sleep_max = st.number_input("Max sleep (s)", min_value=0.0, value=3.0, step=0.1)
@@ -35,9 +36,12 @@ def main():
 
 	log_name = st.text_input("Log file name", value=f"send_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
-	placeholder = st.empty()
-	progress_area = st.empty()
-	results_area = st.empty()
+	col1, col2 = st.columns([2, 1])
+	with col1:
+		progress_area = st.empty()
+		results_area = st.empty()
+	with col2:
+		screenshot_gallery = st.container()
 
 	if st.button("Run"):
 		if not lead_file:
@@ -48,11 +52,10 @@ def main():
 			st.stop()
 
 		with tempfile.TemporaryDirectory() as tmpdir:
-			# Save leads to disk
 			lead_path = os.path.join(tmpdir, lead_file.name)
 			with open(lead_path, "wb") as f:
 				f.write(lead_file.read())
-			# Save template
+
 			if template_file is not None:
 				template_path = os.path.join(tmpdir, template_file.name)
 				with open(template_path, "wb") as f:
@@ -61,8 +64,9 @@ def main():
 				template_path = os.path.join(tmpdir, "template.txt.j2")
 				with open(template_path, "w", encoding="utf-8") as f:
 					f.write(template_text or "")
-			# Log path
+
 			log_path = os.path.join(tmpdir, log_name)
+			shot_dir = os.path.join(tmpdir, "screenshots")
 
 			st.info("Running... This may take a while depending on the number of leads.")
 
@@ -70,7 +74,11 @@ def main():
 				event = ev.get("event", "")
 				company = ev.get("company_name", "")
 				url = ev.get("url", "")
+				screenshot = ev.get("screenshot", "")
 				progress_area.write(f"{event}: {company} - {url}")
+				if screenshot and os.path.exists(screenshot):
+					with screenshot_gallery:
+						st.image(screenshot, caption=os.path.basename(screenshot), use_column_width=True)
 
 			process_leads(
 				input_path=lead_path,
@@ -79,14 +87,15 @@ def main():
 				max_per_day=int(max_per_day),
 				start_time=start_time or None,
 				headless=bool(headless),
+				preview=bool(preview),
 				skip_on_captcha=bool(skip_captcha),
 				sleep_min=float(sleep_min),
 				sleep_max=float(sleep_max),
+				screenshot_dir=shot_dir,
 				on_progress=on_progress,
 			)
 
 			st.success("Run completed.")
-			# Show results
 			try:
 				df = pd.read_csv(log_path)
 				df_display = df.tail(100)

@@ -16,6 +16,8 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--skip-on-captcha", action="store_true", help="Skip if CAPTCHA detected")
 	p.add_argument("--sleep-min", type=float, default=1.0, help="Min seconds between sends")
 	p.add_argument("--sleep-max", type=float, default=3.0, help="Max seconds between sends")
+	p.add_argument("--preview", action="store_true", help="Preview mode: fill but do not submit")
+	p.add_argument("--screenshot-dir", default=None, help="Directory to save screenshots")
 	return p.parse_args()
 
 
@@ -31,6 +33,8 @@ def run() -> None:
 		skip_on_captcha=args.skip_on_captcha,
 		sleep_min=args.sleep_min,
 		sleep_max=args.sleep_max,
+		preview=args.preview,
+		screenshot_dir=args.screenshot_dir,
 	)
 
 
