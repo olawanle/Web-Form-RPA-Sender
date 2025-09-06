@@ -1,0 +1,3 @@
+company_name,inquiry_url,contact_name,email,phone,subject
+Example Co., https://example.com/contact, Yamada Taro, sales@example.com, 050-0000-0000, Inquiry
+Demo Ltd., https://example.org/inquiry,,,,
