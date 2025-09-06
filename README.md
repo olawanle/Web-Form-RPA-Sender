@@ -29,13 +29,38 @@ pip install -e .
 ```
 
 ## Web App (Streamlit)
-Run the no-code web app:
+
+### Quick Start (Recommended)
+For the easiest setup, use the batch file launcher:
+```bash
+# Windows
+cd dist
+start_app.bat
+
+# This will:
+# - Activate the virtual environment
+# - Start Streamlit server
+# - Open your browser automatically
+# - Prevent multiple browser tabs
+```
+
+### Manual Start
+Run the no-code web app manually:
 ```bash
 streamlit run streamlit_app.py
 ```
 - Upload your CSV/Excel and message template (or edit in the page)
 - Configure options (daily cap, start time, headless, skip CAPTCHA)
 - Click Run; view status updates and download the log CSV
+
+### Required CSV Format
+Your leads CSV must have these columns:
+- `company_name` (required)
+- `inquiry_url` (required)
+- `contact_name` (optional)
+- `email` (optional)
+- `phone` (optional)
+- `subject` (optional)
 
 ## CLI Usage
 Run without installing CLI:
@@ -53,6 +78,20 @@ Or with CLI after `pip install -e .`:
 ```bash
 form-rpa --input sample_leads.csv --template templates/message_en.txt.j2 --log send_log.csv --headless --skip-on-captcha
 ```
+
+## Troubleshooting
+
+### Multiple Browser Tabs Opening
+**Problem:** Application opens multiple Chrome tabs instead of one.
+**Solution:** Use `start_app.bat` instead of the `.exe` file. The batch file approach prevents this issue.
+
+### "Page Not Found" Errors
+**Problem:** Browser shows "This site can't be reached" or "ERR_CONNECTION_REFUSED".
+**Solution:** Ensure you're using `start_app.bat` which properly starts the Streamlit server before opening the browser.
+
+### Missing Module Errors
+**Problem:** "ModuleNotFoundError: No module named 'form_rpa'".
+**Solution:** Make sure the `form_rpa` directory is in the same folder as `streamlit_app.py`.
 
 ## Notes
 - Optional fields are filled only if present in your CSV/Excel.
