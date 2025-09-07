@@ -4,7 +4,7 @@
 #define MyAppVersion "0.1.0"
 #define MyAppPublisher "WebFormRPA"
 #define MyAppExeName "WebFormRPA.exe"
-#define MySourceDir "dist\\WebFormRPA"
+#define MySourceDir "..\\..\\dist\\WebFormRPA"
 
 [Setup]
 AppId={{9A7D0A3B-8B5C-4C97-9B7F-7D6C3D5E4C21}
