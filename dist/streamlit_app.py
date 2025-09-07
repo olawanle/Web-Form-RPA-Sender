@@ -109,7 +109,7 @@ def main():
 		browser = st.selectbox(labels["browser"], options=["auto", "chrome", "firefox"], index=0)
 		headless = st.checkbox(labels["headless"], value=True)
 		remote_url = st.text_input(labels["remote"], value=os.getenv("SELENIUM_REMOTE_URL", ""))
-		preview = st.checkbox(labels["preview"], value=True)
+		preview = st.checkbox(labels["preview"], value=False)
 		skip_captcha = st.checkbox(labels["skip_captcha"], value=True)
 		auto_consent = st.checkbox(labels["consent"], value=True)
 		use_multistep = st.checkbox(labels["multistep"], value=True)
@@ -132,12 +132,8 @@ def main():
 
 	log_name = st.text_input(labels["log_name"], value=f"send_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
-	col1, col2 = st.columns([2, 1])
-	with col1:
-		progress_area = st.empty()
-		results_area = st.empty()
-	with col2:
-		screenshot_gallery = st.container()
+	progress_area = st.empty()
+	results_area = st.empty()
 
 	if st.button(labels["run"]):
 		if not lead_file:
@@ -162,7 +158,6 @@ def main():
 					f.write(template_text or "")
 
 			log_path = os.path.join(tmpdir, log_name)
-			shot_dir = os.path.join(tmpdir, "screenshots")
 
 			st.info(labels["running"])
 
@@ -170,11 +165,7 @@ def main():
 				event = ev.get("event", "")
 				company = ev.get("company_name", "")
 				url = ev.get("url", "")
-				screenshot = ev.get("screenshot", "")
 				progress_area.write(f"{event}: {company} - {url}")
-				if screenshot and os.path.exists(screenshot):
-					with screenshot_gallery:
-						st.image(screenshot, caption=os.path.basename(screenshot), use_container_width=True)
 
 			process_leads(
 				input_path=lead_path,
@@ -187,7 +178,7 @@ def main():
 				skip_on_captcha=bool(skip_captcha),
 				sleep_min=float(sleep_min),
 				sleep_max=float(sleep_max),
-				screenshot_dir=shot_dir,
+				screenshot_dir=None,
 				auto_consent=bool(auto_consent),
 				use_multistep_submit=bool(use_multistep),
 				ai_assist_mode=ai_mode,
