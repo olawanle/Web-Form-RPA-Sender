@@ -127,8 +127,8 @@ def main() -> None:
 	# Wait for Streamlit to be ready
 	if wait_for_streamlit(address, port, timeout=30):
 		print(f"Streamlit is ready! Opening browser at http://{address}:{port}")
-	try:
-		webbrowser.open(f"http://{address}:{port}")
+		try:
+			webbrowser.open(f"http://{address}:{port}")
 		except Exception as e:
 			print(f"Failed to open browser: {e}")
 			print(f"Please manually open: http://{address}:{port}")
