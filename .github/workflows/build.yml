@@ -9,6 +9,7 @@ jobs:
   build-matrix:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-13, windows-latest]
     steps:
