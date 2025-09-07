@@ -1,0 +1,74 @@
+Web Form RPA Sender — Run From Source
+
+Prereqs
+- Windows 11 or macOS
+- Python 3.10+ installed and on PATH (python --version)
+- Google Chrome installed (recommended)
+
+1) Clone and enter project
+  git clone https://github.com/olawanle/Web-Form-RPA-Sender.git
+  cd Web-Form-RPA-Sender
+
+2) Create and activate a virtual environment
+  Windows PowerShell:
+    python -m venv .venv
+    .venv\Scripts\Activate.ps1
+  macOS / Linux:
+    python3 -m venv .venv
+    source .venv/bin/activate
+
+3) Install dependencies
+  pip install --upgrade pip
+  pip install -r requirements.txt
+
+4) (Optional) Set OpenRouter API key for AI assist
+  Create a file named .env in the project root containing:
+    OPENROUTER_API_KEY=sk-or-...
+
+5A) Run the Streamlit web app (no-code UI)
+  streamlit run streamlit_app.py
+  - Upload your CSV/Excel and pick a message template (e.g., templates/message_en.txt.j2)
+  - Configure options (daily cap, start time, headless, skip CAPTCHA, AI options)
+  - Start the run and download the log when done
+
+5B) Run via command line (advanced)
+  Basic example:
+    python -m form_rpa.cli --input sample_leads.csv \
+      --template templates/message_en.txt.j2 \
+      --log send_log.csv \
+      --headless --skip-on-captcha
+
+  Useful flags:
+    --max-per-day 500         Daily limit
+    --start-time "09:00"        Start later (HH:MM or YYYY-MM-DD HH:MM)
+    --browser auto|chrome|firefox
+    --remote-url http://<grid>:4444/wd/hub  Use Selenium Grid/Remote
+    --preview                  Fill but do not submit
+    --screenshot-dir shots     Save page screenshots
+    --no-consent               Do not auto-accept privacy/terms
+    --no-multistep             Disable confirm→send flows
+    --ai-assist off|failure_only|always
+    --ai-fill-required         Let AI generate values for required fields
+    --openrouter-api-key KEY   Or set via .env OPENROUTER_API_KEY
+
+6) CSV columns required/optional
+  Required: company_name, inquiry_url
+  Optional: contact_name, email, phone, subject, message
+
+7) Tips
+  - If Japanese CSV fails to load, save as UTF-8 or Shift-JIS/CP932. The loader handles both.
+  - Headless mode may be blocked by some sites; try without --headless.
+  - If Chrome fails to start in your environment, try --browser firefox.
+  - For duplicates: the tool skips rows already logged as success today in the log file.
+
+8) Stop / update
+  - Stop: Ctrl+C in the terminal
+  - Update: git pull, then re-run steps 2–3 if dependencies changed
+
+9) Deactivate virtualenv (when done)
+  deactivate
+
+Troubleshooting (quick)
+- ModuleNotFoundError: activate venv first and reinstall requirements
+- Browser errors on macOS Gatekeeper: not applicable when running from source
+- reCAPTCHA: use --skip-on-captcha (solver integration available on request)
