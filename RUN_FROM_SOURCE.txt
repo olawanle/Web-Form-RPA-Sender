@@ -5,6 +5,16 @@ Prereqs
 - Python 3.10+ installed and on PATH (python --version)
 - Google Chrome installed (recommended)
 
+Install Python and Chrome (if needed)
+  Windows (PowerShell, as Admin):
+    winget install -e --id Python.Python.3.11
+    winget install -e --id Google.Chrome
+
+  macOS (Homebrew):
+    # Install Homebrew if missing: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    brew install python@3.11
+    brew install --cask google-chrome
+
 1) Clone and enter project
   git clone https://github.com/olawanle/Web-Form-RPA-Sender.git
   cd Web-Form-RPA-Sender
