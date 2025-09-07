@@ -76,3 +76,14 @@ exe = EXE(
 	disable_windowed_traceback=False,
 	target_arch=None,
 )
+
+# Build as OneDir so we can package with installers reliably
+coll = COLLECT(
+	exe,
+	a.binaries,
+	a.zipfiles,
+	a.datas,
+	strip=False,
+	upx=True,
+	name='WebFormRPA',
+)
