@@ -5,7 +5,6 @@
 #define MyAppPublisher "WebFormRPA"
 #define MyAppExeName "WebFormRPA.exe"
 #define MySourceDir "dist\\WebFormRPA"
-#define MyOutputDir "dist"
 
 [Setup]
 AppId={{9A7D0A3B-8B5C-4C97-9B7F-7D6C3D5E4C21}
@@ -17,7 +16,7 @@ DefaultGroupName={#MyAppName}
 DisableDirPage=no
 DisableProgramGroupPage=no
 OutputBaseFilename=WebFormRPA-Setup
-OutputDir={#MyOutputDir}
+OutputDir=Output
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
