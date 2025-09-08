@@ -504,53 +504,67 @@ def _submit_enclosing_form(driver: WebDriver) -> bool:
 
 
 def click_submit(driver: WebDriver) -> bool:
-	"""Enhanced submit button detection with multiple strategies."""
+	"""SMART submit button detection with better reliability."""
 	
-	# Strategy 1: Look for explicit submit buttons with text hints
-	selector_sets = [
-		("button[type=submit], input[type=submit]", SUBMIT_HINTS),
-		("button, input[type=button]", SUBMIT_HINTS),
-		("[role=button]", SUBMIT_HINTS),
-		("a", SUBMIT_HINTS),
+	print("🔍 Looking for submit button...")
+	
+	# Strategy 1: Look for explicit submit buttons first
+	submit_selectors = [
+		"button[type=submit]",
+		"input[type=submit]", 
+		"input[type=button][value*='送信']",
+		"input[type=button][value*='submit']",
+		"input[type=button][value*='send']",
+		"button[value*='送信']",
+		"button[value*='submit']",
+		"button[value*='send']"
 	]
-	for selector, hints in selector_sets:
-		for el in _elements_with_text(driver, selector, [h.lower() for h in hints]):
-			try:
-				driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
-				el.click()
-				print(f"✓ Clicked submit button (text): {el.text[:30]}")
-				return True
-			except Exception:
-				continue
 	
-	# Strategy 2: Look for any button that might be a submit button
-	all_buttons = driver.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit], [role=button]")
-	for btn in all_buttons:
-		try:
-			if not btn.is_displayed() or not btn.is_enabled():
-				continue
-			
-			text = (btn.text or btn.get_attribute("value") or "").strip().lower()
-			# Look for submit-like keywords
-			submit_keywords = ["submit", "send", "送信", "確認", "confirm", "送る", "送付", "完了", "確定", "実行", "実行する", "送信する", "確認する"]
-			if any(keyword in text for keyword in submit_keywords):
-				driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
-				btn.click()
-				print(f"✓ Clicked submit button (keyword): {text[:30]}")
-				return True
-		except Exception:
-			continue
-	
-	# Strategy 3: Look for buttons with submit-like classes or IDs
-	class_id_patterns = ["submit", "send", "btn-submit", "submit-btn", "送信", "確認"]
-	for pattern in class_id_patterns:
-		buttons = driver.find_elements(By.CSS_SELECTOR, f"button[class*='{pattern}'], input[class*='{pattern}'], button[id*='{pattern}'], input[id*='{pattern}']")
+	for selector in submit_selectors:
+		buttons = driver.find_elements(By.CSS_SELECTOR, selector)
 		for btn in buttons:
 			try:
 				if btn.is_displayed() and btn.is_enabled():
 					driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
 					btn.click()
-					print(f"✓ Clicked submit button (class/id): {pattern}")
+					print(f"✓ Clicked explicit submit button: {btn.get_attribute('value') or btn.text}")
+					return True
+			except Exception:
+				continue
+	
+	# Strategy 2: Look for buttons with submit text
+	submit_texts = ["送信", "submit", "send", "確認", "confirm", "送る", "送付", "完了", "確定", "実行"]
+	all_buttons = driver.find_elements(By.CSS_SELECTOR, "button, input[type=button], [role=button]")
+	
+	for btn in all_buttons:
+		try:
+			if not btn.is_displayed() or not btn.is_enabled():
+				continue
+			
+			text = (btn.text or btn.get_attribute("value") or "").strip()
+			if any(submit_text in text.lower() for submit_text in submit_texts):
+				driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+				btn.click()
+				print(f"✓ Clicked submit button (text): {text}")
+				return True
+		except Exception:
+			continue
+	
+	# Strategy 3: Look for buttons in forms
+	forms = driver.find_elements(By.CSS_SELECTOR, "form")
+	for form in forms:
+		form_buttons = form.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit]")
+		for btn in form_buttons:
+			try:
+				if btn.is_displayed() and btn.is_enabled():
+					# Skip if it's clearly not a submit button
+					text = (btn.text or btn.get_attribute("value") or "").strip().lower()
+					if any(skip_word in text for skip_word in ["cancel", "reset", "clear", "キャンセル", "リセット", "クリア"]):
+						continue
+					
+					driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+					btn.click()
+					print(f"✓ Clicked form button: {text}")
 					return True
 			except Exception:
 				continue
@@ -559,25 +573,6 @@ def click_submit(driver: WebDriver) -> bool:
 	if _submit_enclosing_form(driver):
 		print("✓ Submitted form directly")
 		return True
-	
-	# Strategy 5: Look for any clickable element that might submit
-	clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, input, a, [onclick], [role=button]")
-	for el in clickable_elements:
-		try:
-			if not el.is_displayed() or not el.is_enabled():
-				continue
-			
-			# Check if it's in a form context
-			form = el.find_element(By.XPATH, "ancestor::form")
-			if form:
-				text = (el.text or el.get_attribute("value") or "").strip().lower()
-				if text and len(text) < 20:  # Short text, likely a button
-					driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
-					el.click()
-					print(f"✓ Clicked potential submit element: {text[:30]}")
-					return True
-		except Exception:
-			continue
 	
 	print("✗ No submit button found")
 	return False
@@ -819,16 +814,13 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 			continue
 	
 	# Enhanced checkbox handling
-	print("📋 Processing checkboxes...")
 	checkbox_count = _fill_all_checkboxes_aggressive(driver)
 	filled_count += checkbox_count
 	
 	# Enhanced select handling
-	print("📋 Processing selects...")
 	select_count = _fill_all_selects_aggressive(driver)
 	filled_count += select_count
 	
-	print(f"✅ Aggressive filling complete: {filled_count} fields filled")
 	return filled_count
 
 
@@ -980,57 +972,80 @@ def _fill_element_aggressive(driver: WebDriver, el, value: str) -> bool:
 
 
 def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
-	"""ULTRA AGGRESSIVE: Check ALL checkboxes except obvious 'no' ones."""
+	"""SMART checkbox handling: Check relevant checkboxes intelligently."""
 	filled_count = 0
 	
 	# Find all checkboxes
 	checkboxes = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
-	print(f"🔍 Found {len(checkboxes)} checkboxes on page")
+	if not checkboxes:
+		return 0
 	
-	# ULTRA AGGRESSIVE MODE: Check ALL checkboxes except obvious "no" ones
+	# Only log if there are checkboxes
+	if checkboxes:
+		print(f"🔍 Found {len(checkboxes)} checkboxes on page")
+	
+	# Smart approach: Check checkboxes based on context and importance
 	for i, cb in enumerate(checkboxes):
 		try:
 			# Skip if already checked
 			if cb.is_selected():
-				print(f"   Checkbox {i+1}: Already checked, skipping")
 				continue
 			
 			# Skip if not visible or enabled
 			if not cb.is_displayed() or not cb.is_enabled():
-				print(f"   Checkbox {i+1}: Not visible/enabled, skipping")
 				continue
 			
 			# Get associated text for analysis
 			text = _get_checkbox_associated_text(driver, cb).lower()
-			print(f"   Checkbox {i+1}: '{text[:100]}'")
 			
-			# Only skip if it's obviously a "no" or "disagree" checkbox
+			# Skip obvious "no" checkboxes
 			negative_keywords = [
 				"no", "disagree", "拒否", "しない", "不要", "いらない", "no thanks", "decline",
 				"refuse", "reject", "deny", "not", "never", "don't", "won't", "can't",
-				"しないで", "やめる", "キャンセル", "停止", "無効", "disable"
+				"しないで", "やめる", "キャンセル", "停止", "無効", "disable", "opt out"
 			]
 			
-			# Check if this is obviously a "no" checkbox
-			is_negative = any(keyword in text for keyword in negative_keywords)
-			
-			if is_negative:
-				print(f"   Checkbox {i+1}: Skipping (negative keyword detected)")
+			if any(keyword in text for keyword in negative_keywords):
 				continue
 			
-			# Try to check this checkbox
-			print(f"   Checkbox {i+1}: Attempting to check...")
-			if _checkbox_set_checked_aggressive(driver, cb):
-				filled_count += 1
-				print(f"   ✅ Checkbox {i+1}: Successfully checked!")
-			else:
-				print(f"   ❌ Checkbox {i+1}: Failed to check")
+			# Check if this looks like an important checkbox
+			important_keywords = [
+				"agree", "consent", "privacy", "policy", "terms", "accept", "acceptance",
+				"同意", "プライバシー", "個人情報", "利用規約", "規約", "個人情報の取り扱い",
+				"承認", "承諾", "了承", "了解", "確認", "確認する", "チェック", "選択",
+				"subscribe", "newsletter", "marketing", "promotion", "updates", "notifications",
+				"メルマガ", "ニュースレター", "配信", "お知らせ", "通知", "更新情報",
+				"required", "必須", "必要", "mandatory"
+			]
+			
+			# Check if it's required
+			is_required = _is_required(cb)
+			
+			# Check if it looks important
+			is_important = any(keyword in text for keyword in important_keywords)
+			
+			# Check if it's in a form context (likely a consent checkbox)
+			is_in_form = False
+			try:
+				form = cb.find_element(By.XPATH, "ancestor::form")
+				other_inputs = form.find_elements(By.CSS_SELECTOR, "input, textarea, select")
+				is_in_form = len(other_inputs) > 1
+			except Exception:
+				pass
+			
+			# Only check if it's required, important, or in a form context
+			should_check = is_required or is_important or is_in_form
+			
+			if should_check:
+				if _checkbox_set_checked_aggressive(driver, cb):
+					filled_count += 1
+					print(f"✓ Checked checkbox: {text[:50]}")
 				
-		except Exception as e:
-			print(f"   ❌ Checkbox {i+1}: Error - {str(e)[:50]}")
+		except Exception:
 			continue
 	
-	print(f"🎯 Total checkboxes checked: {filled_count}")
+	if filled_count > 0:
+		print(f"🎯 Checked {filled_count} checkboxes")
 	return filled_count
 
 
