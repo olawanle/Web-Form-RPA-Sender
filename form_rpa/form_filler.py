@@ -1010,5 +1010,5 @@ def _checkbox_set_checked_aggressive(driver: WebDriver, cb) -> bool:
 				driver.execute_script("arguments[0].checked = true;", cb)
 				_dispatch_set_value(driver, cb, "true")
 				return cb.is_selected()
-		except Exception:
-			return False
+			except Exception:
+				return False
