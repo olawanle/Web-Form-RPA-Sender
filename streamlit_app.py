@@ -192,11 +192,42 @@ def main():
 			st.success(labels["done"])
 			try:
 				df = pd.read_csv(log_path)
-				df_display = df.tail(100)
-				results_area.dataframe(df_display)
-				st.download_button(labels["download"], data=open(log_path, "rb").read(), file_name=log_name, mime="text/csv")
+				
+				# Show summary statistics
+				st.subheader("📊 Run Summary")
+				col1, col2, col3, col4 = st.columns(4)
+				with col1:
+					st.metric("Total Attempts", len(df))
+				with col2:
+					submitted = len(df[df['status'] == 'submitted'])
+					st.metric("Successful", submitted)
+				with col3:
+					failed = len(df[df['status'] == 'failed'])
+					st.metric("Failed", failed)
+				with col4:
+					captcha = len(df[df['status'] == 'captcha_skipped'])
+					st.metric("CAPTCHA Skipped", captcha)
+				
+				# Show recent results
+				st.subheader("📋 Recent Results (Last 20)")
+				df_display = df.tail(20)
+				results_area.dataframe(df_display, use_container_width=True)
+				
+				# Download button
+				st.subheader("💾 Download Results")
+				with open(log_path, "rb") as f:
+					csv_data = f.read()
+				st.download_button(
+					label=f"📥 {labels['download']} ({len(df)} rows)",
+					data=csv_data,
+					file_name=log_name,
+					mime="text/csv",
+					help="Click to download the complete CSV log file"
+				)
+				
 			except Exception as e:
 				st.error(f"Could not read log file: {e}")
+				st.error("Please check the log file path and try again.")
 
 
 if __name__ == "__main__":

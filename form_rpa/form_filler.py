@@ -15,28 +15,34 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 FIELD_HINTS = {
 	"name": [
-		"name", "your-name", "fullname", "full-name", "contact",
-		"お名前", "氏名", "担当者", "担当者名", "ご担当者",
+		"name", "your-name", "fullname", "full-name", "contact", "firstname", "lastname",
+		"お名前", "氏名", "担当者", "担当者名", "ご担当者", "姓名", "フルネーム", "お客様名",
+		"customer_name", "user_name", "contact_name", "representative", "responsible"
 	],
 	"company": [
-		"company", "organization", "corp", "company-name",
-		"会社名", "御社名", "貴社名", "法人名", "店舗名",
+		"company", "organization", "corp", "company-name", "business", "firm", "enterprise",
+		"会社名", "御社名", "貴社名", "法人名", "店舗名", "企業名", "組織名", "事業者名",
+		"organization_name", "business_name", "firm_name", "client_name"
 	],
 	"email": [
-		"email", "mail", "e-mail", "your-email",
-		"メール", "メールアドレス",
+		"email", "mail", "e-mail", "your-email", "email-address", "mail-address",
+		"メール", "メールアドレス", "メールアドレス", "連絡先メール", "返信先メール",
+		"contact_email", "reply_email", "notification_email"
 	],
 	"phone": [
-		"phone", "tel", "telephone",
-		"携帯", "電話", "電話番号",
+		"phone", "tel", "telephone", "mobile", "cell", "phone-number", "contact-number",
+		"携帯", "電話", "電話番号", "連絡先", "連絡先電話", "お電話", "TEL",
+		"contact_phone", "mobile_phone", "phone_number", "telephone_number"
 	],
 	"subject": [
-		"subject",
-		"件名", "題名",
+		"subject", "title", "topic", "inquiry-subject", "message-subject",
+		"件名", "題名", "タイトル", "お問い合わせ件名", "ご用件", "件名",
+		"inquiry_title", "message_title", "contact_subject"
 	],
 	"message": [
-		"message", "inquiry", "contact", "body", "comment",
-		"お問い合わせ", "お問い合わせ内容", "内容", "本文", "ご用件", "ご質問",
+		"message", "inquiry", "contact", "body", "comment", "content", "description",
+		"お問い合わせ", "お問い合わせ内容", "内容", "本文", "ご用件", "ご質問", "メッセージ",
+		"inquiry_message", "contact_message", "message_body", "comments", "details"
 	],
 }
 
@@ -360,6 +366,64 @@ def find_fields(driver: WebDriver) -> Dict[str, Optional[object]]:
 		"subject": _find_input_like(driver, FIELD_HINTS["subject"], input_types=("text")),
 		"message": _find_input_like(driver, FIELD_HINTS["message"], input_types=("text")),
 	}
+	
+	# Enhanced: Try to find fields by more comprehensive patterns
+	fields = _enhance_field_detection(driver, fields)
+	
+	return fields
+
+
+def _enhance_field_detection(driver: WebDriver, fields: Dict[str, Optional[object]]) -> Dict[str, Optional[object]]:
+	"""Enhanced field detection using more comprehensive patterns."""
+	# If we still don't have some fields, try more aggressive detection
+	for field_type in ["name", "company", "email", "phone", "subject", "message"]:
+		if fields.get(field_type) is not None:
+			continue
+		
+		# Try finding by input type first
+		if field_type == "email":
+			email_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type=email]")
+			if email_inputs:
+				fields[field_type] = email_inputs[0]
+				continue
+		elif field_type == "phone":
+			tel_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type=tel]")
+			if tel_inputs:
+				fields[field_type] = tel_inputs[0]
+				continue
+		
+		# Try finding by placeholder text
+		placeholder_hints = FIELD_HINTS[field_type]
+		for hint in placeholder_hints:
+			placeholder_inputs = driver.find_elements(By.CSS_SELECTOR, f"input[placeholder*='{hint}'], textarea[placeholder*='{hint}']")
+			if placeholder_inputs:
+				fields[field_type] = placeholder_inputs[0]
+				break
+		
+		# Try finding by aria-label
+		if fields.get(field_type) is None:
+			for hint in placeholder_hints:
+				aria_inputs = driver.find_elements(By.CSS_SELECTOR, f"input[aria-label*='{hint}'], textarea[aria-label*='{hint}']")
+				if aria_inputs:
+					fields[field_type] = aria_inputs[0]
+					break
+		
+		# Try finding by class name patterns
+		if fields.get(field_type) is None:
+			class_patterns = {
+				"name": ["name", "fullname", "contact", "user"],
+				"company": ["company", "organization", "business", "firm"],
+				"email": ["email", "mail", "contact"],
+				"phone": ["phone", "tel", "mobile", "contact"],
+				"subject": ["subject", "title", "topic"],
+				"message": ["message", "comment", "content", "body"]
+			}
+			for pattern in class_patterns.get(field_type, []):
+				class_inputs = driver.find_elements(By.CSS_SELECTOR, f"input[class*='{pattern}'], textarea[class*='{pattern}']")
+				if class_inputs:
+					fields[field_type] = class_inputs[0]
+					break
+	
 	return fields
 
 
@@ -647,8 +711,8 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 	"""Aggressively fill ALL remaining empty form fields with placeholders."""
 	filled_count = 0
 	
-	# Get all form elements
-	all_inputs = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select")
+	# Get all form elements with more comprehensive selectors
+	all_inputs = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select, [contenteditable='true']")
 	
 	for el in all_inputs:
 		try:
@@ -662,6 +726,11 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 			
 			# Skip hidden fields
 			if not el.is_displayed() or not el.is_enabled():
+				continue
+			
+			# Skip certain input types that shouldn't be filled
+			input_type = (el.get_attribute("type") or "").lower()
+			if input_type in ["hidden", "submit", "button", "reset", "image", "file"]:
 				continue
 			
 			# Generate appropriate placeholder
@@ -678,6 +747,48 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 	
 	# Enhanced checkbox handling
 	filled_count += _fill_all_checkboxes_aggressive(driver)
+	
+	# Enhanced select handling
+	filled_count += _fill_all_selects_aggressive(driver)
+	
+	return filled_count
+
+
+def _fill_all_selects_aggressive(driver: WebDriver) -> int:
+	"""Fill all select dropdowns that need values."""
+	filled_count = 0
+	selects = driver.find_elements(By.TAG_NAME, "select")
+	
+	for select_el in selects:
+		try:
+			if not select_el.is_displayed() or not select_el.is_enabled():
+				continue
+			
+			select = Select(select_el)
+			options = select.options
+			
+			# Skip if already has a selection
+			if select.first_selected_option.get_attribute("value"):
+				continue
+			
+			# Try to select the first non-empty option
+			for option in options:
+				value = option.get_attribute("value")
+				text = option.text.strip()
+				if value and value != "" and text:
+					try:
+						select.select_by_value(value)
+						filled_count += 1
+						break
+					except Exception:
+						try:
+							select.select_by_visible_text(text)
+							filled_count += 1
+							break
+						except Exception:
+							continue
+		except Exception:
+			continue
 	
 	return filled_count
 
