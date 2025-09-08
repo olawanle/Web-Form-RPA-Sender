@@ -30,6 +30,17 @@ def parse_args() -> argparse.Namespace:
 
 def run() -> None:
 	args = parse_args()
+
+	def _print_progress(ev: dict) -> None:
+		event = ev.get("event", "")
+		company = ev.get("company_name", "")
+		url = ev.get("url", "")
+		reason = ev.get("reason", "")
+		msg = f"{event}: {company} - {url}"
+		if reason:
+			msg += f" | {reason}"
+		print(msg, flush=True)
+
 	process_leads(
 		input_path=args.input,
 		template_path=args.template,
@@ -49,7 +60,32 @@ def run() -> None:
 		ai_fill_required=bool(args.ai_fill_required),
 		browser=args.browser,
 		remote_url=args.remote_url,
+		on_progress=_print_progress,
 	)
+
+	# Print summary to terminal
+	try:
+		import csv
+		from collections import Counter
+		rows = []
+		with open(args.log, newline="", encoding="utf-8") as f:
+			reader = csv.DictReader(f)
+			rows = list(reader)
+		counts = Counter(r.get("status", "") for r in rows)
+		print("\n--- Run Summary ---", flush=True)
+		print(f"Log file: {args.log}", flush=True)
+		print(f"Total rows: {len(rows)}", flush=True)
+		for k, v in counts.items():
+			print(f"{k}: {v}", flush=True)
+		print("\n--- Last 10 results ---", flush=True)
+		for r in rows[-10:]:
+			ts = r.get("timestamp", "")
+			company = r.get("company_name", "")
+			status = r.get("status", "")
+			detail = r.get("detail", "")
+			print(f"{ts} | {company} | {status} | {detail}", flush=True)
+	except Exception as e:
+		print(f"WARNING: Could not read log: {e}", flush=True)
 
 
 if __name__ == "__main__":
