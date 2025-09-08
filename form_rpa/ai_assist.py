@@ -27,26 +27,30 @@ PROMPT = (
 
 
 def suggest_selectors(html_snippet: str, api_key: Optional[str] = None, model: Optional[str] = None) -> Dict[str, object]:
-	client = _client(api_key)
-	model_id = model or DEFAULT_MODEL
-	messages = [
-		{"role": "system", "content": PROMPT},
-		{"role": "user", "content": f"HTML:\n{html_snippet[:20000]}"},
-	]
-	resp = client.chat.completions.create(
-		model=model_id,
-		messages=messages,
-		temperature=0.1,
-	)
-	content = resp.choices[0].message.content or "{}"
-	import json
 	try:
-		start = content.find("{")
-		end = content.rfind("}")
-		if start != -1 and end != -1:
-			content = content[start:end+1]
-		return json.loads(content)
-	except Exception:
+		client = _client(api_key)
+		model_id = model or DEFAULT_MODEL
+		messages = [
+			{"role": "system", "content": PROMPT},
+			{"role": "user", "content": f"HTML:\n{html_snippet[:20000]}"},
+		]
+		resp = client.chat.completions.create(
+			model=model_id,
+			messages=messages,
+			temperature=0.1,
+		)
+		content = resp.choices[0].message.content or "{}"
+		import json
+		try:
+			start = content.find("{")
+			end = content.rfind("}")
+			if start != -1 and end != -1:
+				content = content[start:end+1]
+			return json.loads(content)
+		except Exception:
+			return {}
+	except Exception as e:
+		print(f"⚠️  AI assist failed: {str(e)[:100]}")
 		return {}
 
 
@@ -62,28 +66,32 @@ VALUE_PROMPT_SYSTEM = (
 def generate_values(required_fields: List[Dict[str, str]], context: Dict[str, str], api_key: Optional[str] = None, model: Optional[str] = None) -> Dict[str, str]:
 	if not required_fields:
 		return {}
-	client = _client(api_key)
-	model_id = model or DEFAULT_MODEL
-	import json
-	payload = {
-		"required_fields": required_fields[:50],
-		"context": {k: context.get(k, "") for k in ["company_name", "contact_name"]},
-	}
-	messages = [
-		{"role": "system", "content": VALUE_PROMPT_SYSTEM},
-		{"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-	]
-	resp = client.chat.completions.create(
-		model=model_id,
-		messages=messages,
-		temperature=0.2,
-	)
-	content = resp.choices[0].message.content or "{}"
 	try:
-		start = content.find("{")
-		end = content.rfind("}")
-		if start != -1 and end != -1:
-			content = content[start:end+1]
-		return json.loads(content)
-	except Exception:
+		client = _client(api_key)
+		model_id = model or DEFAULT_MODEL
+		import json
+		payload = {
+			"required_fields": required_fields[:50],
+			"context": {k: context.get(k, "") for k in ["company_name", "contact_name"]},
+		}
+		messages = [
+			{"role": "system", "content": VALUE_PROMPT_SYSTEM},
+			{"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+		]
+		resp = client.chat.completions.create(
+			model=model_id,
+			messages=messages,
+			temperature=0.2,
+		)
+		content = resp.choices[0].message.content or "{}"
+		try:
+			start = content.find("{")
+			end = content.rfind("}")
+			if start != -1 and end != -1:
+				content = content[start:end+1]
+			return json.loads(content)
+		except Exception:
+			return {}
+	except Exception as e:
+		print(f"⚠️  AI value generation failed: {str(e)[:100]}")
 		return {}

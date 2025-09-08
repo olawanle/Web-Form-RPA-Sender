@@ -98,7 +98,7 @@ def process_leads(
 	screenshot_dir: Optional[str] = None,
 	auto_consent: bool = True,
 	use_multistep_submit: bool = True,
-	ai_assist_mode: str = "always",  # default always-on
+	ai_assist_mode: str = "never",  # default off to prevent API errors
 	openrouter_api_key: Optional[str] = None,
 	ai_fill_required: bool = True,
 	browser: str = "auto",
@@ -209,10 +209,13 @@ def process_leads(
 				# Fill all remaining fields with placeholders except message
 				auto_fill_remaining(driver, skip_message=True)
 
-				if ai_assist_mode in ("always",):
-					html = driver.page_source
-					selectors = suggest_selectors(html, api_key=openrouter_api_key)
-					_apply_ai_selectors(driver, selectors, values)
+				if ai_assist_mode in ("always",) and openrouter_api_key:
+					try:
+						html = driver.page_source
+						selectors = suggest_selectors(html, api_key=openrouter_api_key)
+						_apply_ai_selectors(driver, selectors, values)
+					except Exception as e:
+						print(f"   ⚠️  AI assist failed: {str(e)[:100]}")
 
 				if preview:
 					lead_result["status"] = "preview"
@@ -226,47 +229,53 @@ def process_leads(
 
 				print(f"   🔍 Looking for submit button...")
 				clicked = multi_step_submit(driver) if use_multistep_submit else click_submit(driver)
-				if not clicked and ai_assist_mode in ("failure_only",):
-					print(f"   🤖 Trying AI assist for submit...")
-					html = driver.page_source
-					selectors = suggest_selectors(html, api_key=openrouter_api_key)
-					if _apply_ai_selectors(driver, selectors, values):
-						clicked = True
+				if not clicked and ai_assist_mode in ("failure_only",) and openrouter_api_key:
+					try:
+						print(f"   🤖 Trying AI assist for submit...")
+						html = driver.page_source
+						selectors = suggest_selectors(html, api_key=openrouter_api_key)
+						if _apply_ai_selectors(driver, selectors, values):
+							clicked = True
+					except Exception as e:
+						print(f"   ⚠️  AI assist failed: {str(e)[:100]}")
 
 				# If required errors, try AI to generate values and resubmit once
-				if (not preview) and ai_fill_required and detect_required_errors(driver):
-					print(f"   ⚠️  Required field errors detected, trying AI fill...")
-					required = collect_required_fields(driver)
-					gen = generate_values(required, {"company_name": company_name, "contact_name": contact_name}, api_key=openrouter_api_key)
-					# Fill generated values by name/id
-					for item in required:
-						key = item.get("key")
-						val = gen.get(key, "")
-						if not val:
-							continue
-						# Try select by name or id
-						name = item.get("name") or ""
-						fid = item.get("id") or ""
-						el = None
-						if name:
-							try:
-								el = driver.find_element(By.NAME, name)
-							except Exception:
-								pass
-						if el is None and fid:
-							try:
-								el = driver.find_element(By.ID, fid)
-							except Exception:
-								pass
-						if el is not None:
-							try:
-								el.clear()
-								el.send_keys(val)
-							except Exception:
-								pass
-					# Retry submit
-					print(f"   🔄 Retrying submit after AI fill...")
-					clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
+				if (not preview) and ai_fill_required and detect_required_errors(driver) and openrouter_api_key:
+					try:
+						print(f"   ⚠️  Required field errors detected, trying AI fill...")
+						required = collect_required_fields(driver)
+						gen = generate_values(required, {"company_name": company_name, "contact_name": contact_name}, api_key=openrouter_api_key)
+						# Fill generated values by name/id
+						for item in required:
+							key = item.get("key")
+							val = gen.get(key, "")
+							if not val:
+								continue
+							# Try select by name or id
+							name = item.get("name") or ""
+							fid = item.get("id") or ""
+							el = None
+							if name:
+								try:
+									el = driver.find_element(By.NAME, name)
+								except Exception:
+									pass
+							if el is None and fid:
+								try:
+									el = driver.find_element(By.ID, fid)
+								except Exception:
+									pass
+							if el is not None:
+								try:
+									el.clear()
+									el.send_keys(val)
+								except Exception:
+									pass
+						# Retry submit
+						print(f"   🔄 Retrying submit after AI fill...")
+						clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
+					except Exception as e:
+						print(f"   ⚠️  AI fill failed: {str(e)[:100]}")
 
 				if not clicked:
 					lead_result["status"] = "failed"
