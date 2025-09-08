@@ -819,11 +819,16 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 			continue
 	
 	# Enhanced checkbox handling
-	filled_count += _fill_all_checkboxes_aggressive(driver)
+	print("📋 Processing checkboxes...")
+	checkbox_count = _fill_all_checkboxes_aggressive(driver)
+	filled_count += checkbox_count
 	
 	# Enhanced select handling
-	filled_count += _fill_all_selects_aggressive(driver)
+	print("📋 Processing selects...")
+	select_count = _fill_all_selects_aggressive(driver)
+	filled_count += select_count
 	
+	print(f"✅ Aggressive filling complete: {filled_count} fields filled")
 	return filled_count
 
 
@@ -975,74 +980,57 @@ def _fill_element_aggressive(driver: WebDriver, el, value: str) -> bool:
 
 
 def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
-	"""Aggressively fill all checkboxes that look like they should be checked."""
+	"""ULTRA AGGRESSIVE: Check ALL checkboxes except obvious 'no' ones."""
 	filled_count = 0
 	
 	# Find all checkboxes
 	checkboxes = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
+	print(f"🔍 Found {len(checkboxes)} checkboxes on page")
 	
-	# First pass: Check all required checkboxes
-	for cb in checkboxes:
+	# ULTRA AGGRESSIVE MODE: Check ALL checkboxes except obvious "no" ones
+	for i, cb in enumerate(checkboxes):
 		try:
 			# Skip if already checked
 			if cb.is_selected():
+				print(f"   Checkbox {i+1}: Already checked, skipping")
 				continue
 			
 			# Skip if not visible or enabled
 			if not cb.is_displayed() or not cb.is_enabled():
+				print(f"   Checkbox {i+1}: Not visible/enabled, skipping")
 				continue
 			
-			# Check if this is required
-			if _is_required(cb):
-				if _checkbox_set_checked_aggressive(driver, cb):
-					filled_count += 1
-					print(f"✓ Checked required checkbox: {_get_checkbox_associated_text(driver, cb)[:50]}")
-				
-		except Exception:
-			continue
-	
-	# Second pass: Check all consent/agreement checkboxes
-	for cb in checkboxes:
-		try:
-			# Skip if already checked
-			if cb.is_selected():
-				continue
-			
-			# Skip if not visible or enabled
-			if not cb.is_displayed() or not cb.is_enabled():
-				continue
-			
-			# Check if this looks like a consent/agreement checkbox
-			should_check = _should_checkbox_be_checked(driver, cb)
-			if should_check and _checkbox_set_checked_aggressive(driver, cb):
-				filled_count += 1
-				print(f"✓ Checked consent checkbox: {_get_checkbox_associated_text(driver, cb)[:50]}")
-				
-		except Exception:
-			continue
-	
-	# Third pass: Check any remaining unchecked checkboxes (aggressive mode)
-	for cb in checkboxes:
-		try:
-			# Skip if already checked
-			if cb.is_selected():
-				continue
-			
-			# Skip if not visible or enabled
-			if not cb.is_displayed() or not cb.is_enabled():
-				continue
-			
-			# Check if it's not obviously a "no" or "disagree" checkbox
+			# Get associated text for analysis
 			text = _get_checkbox_associated_text(driver, cb).lower()
-			negative_keywords = ["no", "disagree", "拒否", "しない", "不要", "いらない", "no thanks", "decline"]
-			if not any(keyword in text for keyword in negative_keywords):
-				if _checkbox_set_checked_aggressive(driver, cb):
-					filled_count += 1
-					print(f"✓ Checked additional checkbox: {_get_checkbox_associated_text(driver, cb)[:50]}")
+			print(f"   Checkbox {i+1}: '{text[:100]}'")
+			
+			# Only skip if it's obviously a "no" or "disagree" checkbox
+			negative_keywords = [
+				"no", "disagree", "拒否", "しない", "不要", "いらない", "no thanks", "decline",
+				"refuse", "reject", "deny", "not", "never", "don't", "won't", "can't",
+				"しないで", "やめる", "キャンセル", "停止", "無効", "disable"
+			]
+			
+			# Check if this is obviously a "no" checkbox
+			is_negative = any(keyword in text for keyword in negative_keywords)
+			
+			if is_negative:
+				print(f"   Checkbox {i+1}: Skipping (negative keyword detected)")
+				continue
+			
+			# Try to check this checkbox
+			print(f"   Checkbox {i+1}: Attempting to check...")
+			if _checkbox_set_checked_aggressive(driver, cb):
+				filled_count += 1
+				print(f"   ✅ Checkbox {i+1}: Successfully checked!")
+			else:
+				print(f"   ❌ Checkbox {i+1}: Failed to check")
 				
-		except Exception:
+		except Exception as e:
+			print(f"   ❌ Checkbox {i+1}: Error - {str(e)[:50]}")
 			continue
 	
+	print(f"🎯 Total checkboxes checked: {filled_count}")
 	return filled_count
 
 
@@ -1136,22 +1124,60 @@ def _get_checkbox_associated_text(driver: WebDriver, cb) -> str:
 
 
 def _checkbox_set_checked_aggressive(driver: WebDriver, cb) -> bool:
-	"""Aggressively try to check a checkbox using multiple methods."""
+	"""ULTRA AGGRESSIVE: Try multiple methods to check a checkbox."""
+	methods = [
+		("Direct click", lambda: cb.click()),
+		("JS click", lambda: driver.execute_script("arguments[0].click();", cb)),
+		("JS checked=true", lambda: driver.execute_script("arguments[0].checked = true;", cb)),
+		("JS dispatchEvent", lambda: driver.execute_script("""
+			arguments[0].checked = true;
+			arguments[0].dispatchEvent(new Event('change', {bubbles: true}));
+			arguments[0].dispatchEvent(new Event('click', {bubbles: true}));
+		""", cb)),
+		("Force click with offset", lambda: driver.execute_script("""
+			var rect = arguments[0].getBoundingClientRect();
+			var x = rect.left + rect.width/2;
+			var y = rect.top + rect.height/2;
+			var event = new MouseEvent('click', {clientX: x, clientY: y, bubbles: true});
+			arguments[0].dispatchEvent(event);
+		""", cb))
+	]
+	
+	# First scroll into view
 	try:
-		# Method 1: Direct click
 		driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", cb)
-		cb.click()
+		time.sleep(0.1)  # Small delay for scroll
+	except Exception:
+		pass
+	
+	# Try each method
+	for method_name, method_func in methods:
+		try:
+			method_func()
+			time.sleep(0.1)  # Small delay to let the change register
+			
+			# Check if it worked
+			if cb.is_selected():
+				return True
+				
+			# Also check the checked property directly
+			checked = driver.execute_script("return arguments[0].checked;", cb)
+			if checked:
+				return True
+				
+		except Exception as e:
+			continue
+	
+	# Final attempt: Force set checked and trigger events
+	try:
+		driver.execute_script("""
+			arguments[0].checked = true;
+			arguments[0].setAttribute('checked', 'checked');
+			arguments[0].dispatchEvent(new Event('change', {bubbles: true}));
+			arguments[0].dispatchEvent(new Event('input', {bubbles: true}));
+			arguments[0].dispatchEvent(new Event('click', {bubbles: true}));
+		""", cb)
+		time.sleep(0.2)
 		return cb.is_selected()
 	except Exception:
-		try:
-			# Method 2: JavaScript click
-			driver.execute_script("arguments[0].click();", cb)
-			return cb.is_selected()
-		except Exception:
-			try:
-				# Method 3: Set checked property
-				driver.execute_script("arguments[0].checked = true;", cb)
-				_dispatch_set_value(driver, cb, "true")
-				return cb.is_selected()
-			except Exception:
-				return False
+		return False
