@@ -397,6 +397,10 @@ def fill_fields(driver: WebDriver, values: Dict[str, str], *, auto_selects: bool
 				_choose_first_radio_in_group(driver, r)
 
 	accept_consents(driver, auto_consent=auto_consent)
+	
+	# Enhanced: Fill ALL remaining empty fields with placeholders
+	_fill_all_remaining_fields_aggressive(driver, values)
+	
 	# Exit iframe to restore context
 	if switched:
 		try:
@@ -637,3 +641,263 @@ def auto_fill_remaining(driver: WebDriver, *, skip_message: bool = True) -> int:
 		except Exception:
 			pass
 	return filled
+
+
+def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, str]) -> int:
+	"""Aggressively fill ALL remaining empty form fields with placeholders."""
+	filled_count = 0
+	
+	# Get all form elements
+	all_inputs = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select")
+	
+	for el in all_inputs:
+		try:
+			# Skip if already filled or not fillable
+			if _is_element_filled(el):
+				continue
+			
+			# Skip message fields if requested
+			if _is_message_field(el):
+				continue
+			
+			# Skip hidden fields
+			if not el.is_displayed() or not el.is_enabled():
+				continue
+			
+			# Generate appropriate placeholder
+			placeholder = _generate_placeholder_for_element(el, values)
+			if not placeholder:
+				continue
+			
+			# Try to fill the element
+			if _fill_element_aggressive(driver, el, placeholder):
+				filled_count += 1
+				
+		except Exception:
+			continue
+	
+	# Enhanced checkbox handling
+	filled_count += _fill_all_checkboxes_aggressive(driver)
+	
+	return filled_count
+
+
+def _is_element_filled(el) -> bool:
+	"""Check if element already has a value."""
+	try:
+		tag = el.tag_name.lower()
+		if tag == "select":
+			select = Select(el)
+			return select.first_selected_option.get_attribute("value") != ""
+		elif tag == "input":
+			input_type = (el.get_attribute("type") or "text").lower()
+			if input_type in ["checkbox", "radio"]:
+				return el.is_selected()
+			else:
+				return bool(el.get_attribute("value") or el.get_attribute("textContent"))
+		elif tag == "textarea":
+			return bool(el.get_attribute("value") or el.text)
+	except Exception:
+		return False
+	return False
+
+
+def _is_message_field(el) -> bool:
+	"""Check if element is likely a message field."""
+	attrs = [
+		el.get_attribute("name") or "",
+		el.get_attribute("id") or "",
+		el.get_attribute("placeholder") or "",
+		el.get_attribute("aria-label") or "",
+	]
+	text = " ".join(attrs).lower()
+	message_hints = ["message", "comment", "body", "content", "お問い合わせ", "内容", "本文", "ご質問"]
+	return any(hint in text for hint in message_hints)
+
+
+def _generate_placeholder_for_element(el, values: Dict[str, str]) -> str:
+	"""Generate appropriate placeholder value for element."""
+	tag = el.tag_name.lower()
+	input_type = (el.get_attribute("type") or "text").lower()
+	
+	# Use existing values if available
+	if input_type == "email" and values.get("email"):
+		return values["email"]
+	elif input_type == "tel" and values.get("phone"):
+		return values["phone"]
+	elif "name" in (el.get_attribute("name") or "").lower() and values.get("name"):
+		return values["name"]
+	elif "company" in (el.get_attribute("name") or "").lower() and values.get("company"):
+		return values["company"]
+	
+	# Generate placeholders based on type
+	if input_type == "email":
+		return "test@example.com"
+	elif input_type == "tel":
+		return "03-1234-5678"
+	elif input_type in ["number", "range"]:
+		return "1"
+	elif input_type == "url":
+		return "https://example.com"
+	elif input_type == "date":
+		return "2024-01-01"
+	elif input_type == "time":
+		return "09:00"
+	elif tag == "select":
+		return None  # Will be handled by select option selection
+	else:
+		# Text inputs
+		attrs = [
+			el.get_attribute("name") or "",
+			el.get_attribute("id") or "",
+			el.get_attribute("placeholder") or "",
+		]
+		text = " ".join(attrs).lower()
+		
+		if any(k in text for k in ["name", "氏名", "お名前"]):
+			return "テスト太郎"
+		elif any(k in text for k in ["company", "会社", "法人"]):
+			return "テスト株式会社"
+		elif any(k in text for k in ["address", "住所"]):
+			return "東京都渋谷区1-1-1"
+		elif any(k in text for k in ["zip", "郵便", "〒"]):
+			return "150-0001"
+		else:
+			return "テストデータ"
+
+
+def _fill_element_aggressive(driver: WebDriver, el, value: str) -> bool:
+	"""Aggressively try to fill an element with multiple methods."""
+	try:
+		# Method 1: Standard clear and send_keys
+		el.clear()
+		el.send_keys(value)
+		_dispatch_set_value(driver, el, value)
+		return True
+	except Exception:
+		try:
+			# Method 2: JavaScript value setting
+			driver.execute_script("arguments[0].value = arguments[1];", el, value)
+			_dispatch_set_value(driver, el, value)
+			return True
+		except Exception:
+			try:
+				# Method 3: Focus and send_keys
+				driver.execute_script("arguments[0].focus();", el)
+				el.send_keys(value)
+				return True
+			except Exception:
+				return False
+
+
+def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
+	"""Aggressively fill all checkboxes that look like they should be checked."""
+	filled_count = 0
+	
+	# Find all checkboxes
+	checkboxes = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
+	
+	for cb in checkboxes:
+		try:
+			# Skip if already checked
+			if cb.is_selected():
+				continue
+			
+			# Skip if not visible or enabled
+			if not cb.is_displayed() or not cb.is_enabled():
+				continue
+			
+			# Check if this looks like a consent/agreement checkbox
+			should_check = _should_checkbox_be_checked(driver, cb)
+			if should_check and _checkbox_set_checked_aggressive(driver, cb):
+				filled_count += 1
+				
+		except Exception:
+			continue
+	
+	return filled_count
+
+
+def _should_checkbox_be_checked(driver: WebDriver, cb) -> bool:
+	"""Determine if a checkbox should be checked based on context."""
+	# Get all text associated with this checkbox
+	associated_text = _get_checkbox_associated_text(driver, cb)
+	text_lower = associated_text.lower()
+	
+	# Consent/agreement keywords
+	consent_keywords = [
+		"同意", "プライバシー", "個人情報", "利用規約", "規約", "個人情報の取り扱い",
+		"agree", "consent", "privacy", "policy", "terms", "accept"
+	]
+	
+	# Check if any consent keywords are present
+	if any(keyword in text_lower for keyword in consent_keywords):
+		return True
+	
+	# Check if it's required
+	if _is_required(cb):
+		return True
+	
+	# Check if it's the only checkbox in a group (likely required)
+	name = cb.get_attribute("name")
+	if name:
+		same_name_checkboxes = driver.find_elements(By.CSS_SELECTOR, f"input[type=checkbox][name='{name}']")
+		if len(same_name_checkboxes) == 1:
+			return True
+	
+	return False
+
+
+def _get_checkbox_associated_text(driver: WebDriver, cb) -> str:
+	"""Get all text associated with a checkbox."""
+	text_parts = []
+	
+	# Get label text
+	try:
+		label = driver.find_element(By.XPATH, "//label[@for='" + (cb.get_attribute("id") or "") + "']")
+		text_parts.append(label.text or "")
+	except Exception:
+		pass
+	
+	# Get parent label text
+	try:
+		parent_label = cb.find_element(By.XPATH, "ancestor::label")
+		text_parts.append(parent_label.text or "")
+	except Exception:
+		pass
+	
+	# Get aria-label
+	aria_label = cb.get_attribute("aria-label") or ""
+	if aria_label:
+		text_parts.append(aria_label)
+	
+	# Get nearby text
+	try:
+		parent = cb.find_element(By.XPATH, "..")
+		text_parts.append(parent.text or "")
+	except Exception:
+		pass
+	
+	return " ".join(text_parts)
+
+
+def _checkbox_set_checked_aggressive(driver: WebDriver, cb) -> bool:
+	"""Aggressively try to check a checkbox using multiple methods."""
+	try:
+		# Method 1: Direct click
+		driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", cb)
+		cb.click()
+		return cb.is_selected()
+	except Exception:
+		try:
+			# Method 2: JavaScript click
+			driver.execute_script("arguments[0].click();", cb)
+			return cb.is_selected()
+		except Exception:
+			try:
+				# Method 3: Set checked property
+				driver.execute_script("arguments[0].checked = true;", cb)
+				_dispatch_set_value(driver, cb, "true")
+				return cb.is_selected()
+		except Exception:
+			return False
