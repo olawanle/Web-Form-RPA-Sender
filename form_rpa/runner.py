@@ -142,6 +142,8 @@ def process_leads(
 
 	driver = create_driver(browser=browser, headless=headless, remote_url=remote_url)
 	count = 0
+	processed_leads = []  # Track processed leads for final summary
+	
 	try:
 		for idx, row in leads.iterrows():
 			if count >= remaining:
@@ -156,7 +158,19 @@ def process_leads(
 				"contact_name": contact_name,
 			}
 			lead_prefix = f"{count+1:03d}_" + _sanitize_filename(company_name)
+			
+			# Track this lead
+			lead_result = {
+				"company_name": company_name,
+				"inquiry_url": inquiry_url,
+				"status": "failed",
+				"detail": "Processing interrupted"
+			}
+			
 			try:
+				print(f"\n🔄 Processing {count+1}/{remaining}: {company_name}")
+				print(f"   URL: {inquiry_url}")
+				
 				try:
 					driver.get(inquiry_url)
 				except WebDriverException:
@@ -173,13 +187,11 @@ def process_leads(
 				_emit({"event": "loaded", "company_name": company_name, "url": inquiry_url, "screenshot": shot_loaded})
 
 				if skip_on_captcha and is_captcha_present(driver):
-					append_log(log_path, {
-						"company_name": company_name,
-						"inquiry_url": inquiry_url,
-						"status": "captcha_skipped",
-						"detail": "CAPTCHA detected before fill"
-					})
+					lead_result["status"] = "captcha_skipped"
+					lead_result["detail"] = "CAPTCHA detected before fill"
+					append_log(log_path, lead_result)
 					_emit({"event": "captcha_skipped", "company_name": company_name, "url": inquiry_url})
+					processed_leads.append(lead_result)
 					continue
 
 				message = render_template(template_path, context)
@@ -191,6 +203,8 @@ def process_leads(
 					"subject": row.get("subject", ""),
 					"message": message,
 				}
+				
+				print(f"   📝 Filling form fields...")
 				fill_fields(driver, values, auto_consent=auto_consent)
 				# Fill all remaining fields with placeholders except message
 				auto_fill_remaining(driver, skip_message=True)
@@ -201,13 +215,19 @@ def process_leads(
 					_apply_ai_selectors(driver, selectors, values)
 
 				if preview:
-					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "preview", "detail": "No submit (preview mode)"})
+					lead_result["status"] = "preview"
+					lead_result["detail"] = "No submit (preview mode)"
+					append_log(log_path, lead_result)
+					_emit({"event": "preview", "company_name": company_name, "url": inquiry_url})
+					processed_leads.append(lead_result)
 					count += 1
 					time.sleep(random.uniform(sleep_min, sleep_max))
 					continue
 
+				print(f"   🔍 Looking for submit button...")
 				clicked = multi_step_submit(driver) if use_multistep_submit else click_submit(driver)
 				if not clicked and ai_assist_mode in ("failure_only",):
+					print(f"   🤖 Trying AI assist for submit...")
 					html = driver.page_source
 					selectors = suggest_selectors(html, api_key=openrouter_api_key)
 					if _apply_ai_selectors(driver, selectors, values):
@@ -215,6 +235,7 @@ def process_leads(
 
 				# If required errors, try AI to generate values and resubmit once
 				if (not preview) and ai_fill_required and detect_required_errors(driver):
+					print(f"   ⚠️  Required field errors detected, trying AI fill...")
 					required = collect_required_fields(driver)
 					gen = generate_values(required, {"company_name": company_name, "contact_name": contact_name}, api_key=openrouter_api_key)
 					# Fill generated values by name/id
@@ -244,14 +265,20 @@ def process_leads(
 							except Exception:
 								pass
 					# Retry submit
+					print(f"   🔄 Retrying submit after AI fill...")
 					clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
 
 				if not clicked:
-					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "failed", "detail": "Submit button not found"})
+					lead_result["status"] = "failed"
+					lead_result["detail"] = "Submit button not found"
+					append_log(log_path, lead_result)
 					_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": "submit_not_found"})
+					processed_leads.append(lead_result)
+					print(f"   ❌ Failed: Submit button not found")
 					continue
 
-				wait_post_submit(driver)
+				print(f"   ⏳ Waiting for post-submit confirmation...")
+				submission_successful = wait_post_submit(driver)
 				shot_after = ""
 				if screenshot_dir:
 					shot_after = os.path.join(screenshot_dir, f"{lead_prefix}_after_submit.png")
@@ -259,19 +286,62 @@ def process_leads(
 				_emit({"event": "submitted_wait", "company_name": company_name, "url": inquiry_url, "screenshot": shot_after})
 
 				if skip_on_captcha and is_captcha_present(driver):
-					append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "captcha_skipped", "detail": "CAPTCHA after submit"})
+					lead_result["status"] = "captcha_skipped"
+					lead_result["detail"] = "CAPTCHA after submit"
+					append_log(log_path, lead_result)
 					_emit({"event": "captcha_skipped", "company_name": company_name, "url": inquiry_url})
+					processed_leads.append(lead_result)
+					print(f"   ⚠️  CAPTCHA detected after submit")
 					continue
 
-				append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "submitted", "detail": ""})
+				if not submission_successful:
+					lead_result["status"] = "failed"
+					lead_result["detail"] = "Form submission may have failed - no success confirmation detected"
+					append_log(log_path, lead_result)
+					_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": "no_success_confirmation"})
+					processed_leads.append(lead_result)
+					print(f"   ❌ Failed: No success confirmation detected")
+					continue
+
+				lead_result["status"] = "submitted"
+				lead_result["detail"] = ""
+				append_log(log_path, lead_result)
 				_emit({"event": "submitted", "company_name": company_name, "url": inquiry_url})
+				processed_leads.append(lead_result)
+				print(f"   ✅ Successfully submitted!")
 				count += 1
 				time.sleep(random.uniform(sleep_min, sleep_max))
+				
 			except Exception as e:
-				append_log(log_path, {"company_name": company_name, "inquiry_url": inquiry_url, "status": "failed", "detail": str(e)})
+				lead_result["status"] = "failed"
+				lead_result["detail"] = str(e)
+				append_log(log_path, lead_result)
 				_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": str(e)})
+				processed_leads.append(lead_result)
+				print(f"   ❌ Error: {str(e)[:100]}")
+				
+	except KeyboardInterrupt:
+		print(f"\n⚠️  Process interrupted by user")
+		_emit({"event": "interrupted", "message": "Process stopped by user"})
+	except Exception as e:
+		print(f"\n❌ Unexpected error: {e}")
+		_emit({"event": "error", "message": str(e)})
 	finally:
 		try:
 			driver.quit()
 		except Exception:
 			pass
+		
+		# Always show final summary
+		print(f"\n📊 FINAL SUMMARY:")
+		print(f"   Total processed: {len(processed_leads)}")
+		status_counts = {}
+		for lead in processed_leads:
+			status = lead["status"]
+			status_counts[status] = status_counts.get(status, 0) + 1
+		
+		for status, count in status_counts.items():
+			print(f"   {status}: {count}")
+		
+		print(f"\n📁 Log saved to: {log_path}")
+		_emit({"event": "completed", "summary": status_counts, "total": len(processed_leads)})

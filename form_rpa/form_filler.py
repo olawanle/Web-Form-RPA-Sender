@@ -608,13 +608,26 @@ def multi_step_submit(driver: WebDriver, timeout_first: int = 6, timeout_second:
 	return False
 
 
-def wait_post_submit(driver: WebDriver, timeout: int = 10) -> None:
+def wait_post_submit(driver: WebDriver, timeout: int = 10) -> bool:
+	"""Wait for post-submit confirmation and return True if submission appears successful."""
 	try:
+		# Wait for success indicators
 		WebDriverWait(driver, timeout).until(
-			lambda d: "thank" in d.page_source.lower() or "成功" in d.page_source or "受け付け" in d.page_source or "送信" in d.page_source
+			lambda d: any(indicator in d.page_source.lower() for indicator in [
+				"thank", "success", "送信完了", "送信されました", "受け付け", "受付完了", 
+				"お問い合わせありがとう", "ご連絡ありがとう", "確認メール", "confirmation",
+				"送信いたしました", "送信しました", "完了", "successful"
+			])
 		)
+		return True
 	except TimeoutException:
-		pass
+		# Check if we're still on the same form (might indicate failure)
+		page_source = driver.page_source.lower()
+		form_indicators = ["form", "お問い合わせ", "contact", "inquiry", "送信", "submit"]
+		if any(indicator in page_source for indicator in form_indicators):
+			return False
+		# If no form indicators, might be successful
+		return True
 
 
 def _infer_semantic(keywords: str, input_type: str, tag_name: str) -> str:
