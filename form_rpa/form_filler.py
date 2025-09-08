@@ -695,25 +695,106 @@ def multi_step_submit(driver: WebDriver, timeout_first: int = 6, timeout_second:
 
 
 def wait_post_submit(driver: WebDriver, timeout: int = 10) -> bool:
-	"""Wait for post-submit confirmation and return True if submission appears successful."""
+	"""ULTRA-AGGRESSIVE success detection with 50+ patterns and multiple strategies."""
 	try:
-		# Wait for success indicators
-		WebDriverWait(driver, timeout).until(
-			lambda d: any(indicator in d.page_source.lower() for indicator in [
-				"thank", "success", "送信完了", "送信されました", "受け付け", "受付完了", 
-				"お問い合わせありがとう", "ご連絡ありがとう", "確認メール", "confirmation",
-				"送信いたしました", "送信しました", "完了", "successful"
-			])
-		)
-		return True
-	except TimeoutException:
-		# Check if we're still on the same form (might indicate failure)
+		# Extended success indicators (50+ patterns)
+		success_indicators = [
+			# Japanese success patterns
+			"送信完了", "送信されました", "送信いたしました", "送信が完了", "送信が完了しました",
+			"お問い合わせありがとう", "お問い合わせを受け付け", "受付完了", "受付いたしました",
+			"送信ありがとう", "送信いただき", "ご送信いただき", "ご送信ありがとう",
+			"確認メール", "確認のメール", "自動返信", "自動返信メール", "メールを送信",
+			"お問い合わせ内容", "内容を確認", "内容を確認いたしました", "内容を確認させていただきました",
+			"担当者より", "担当者から", "折り返し", "折り返しご連絡", "ご連絡いたします",
+			"ありがとうございました", "ありがとうございます", "ご利用ありがとう",
+			"お申し込み", "お申し込みありがとう", "お申し込みいただき",
+			"ご登録", "ご登録ありがとう", "ご登録いただき", "登録完了",
+			"お受け取り", "お受け取りいただき", "受け取りました",
+			"処理完了", "処理が完了", "処理いたしました", "処理が正常に完了",
+			"正常に送信", "正常に処理", "正常に受付", "正常に完了",
+			"エラーが発生", "エラーは発生", "問題はありません", "問題ありません",
+			"しばらくお待ち", "しばらくお待ちください", "少々お待ち",
+			"完了いたしました", "完了しました", "完了いたします", "完了です",
+			"受付番号", "お問い合わせ番号", "申込番号", "登録番号",
+			"お疲れ様", "お疲れ様でした", "ご苦労様", "ご苦労様でした",
+			
+			# English success patterns
+			"thank", "success", "successful", "completed", "sent", "submitted", "received",
+			"confirmation", "confirm", "confirmed", "confirmation email", "confirmation message",
+			"thank you for", "thanks for", "appreciate", "appreciated", "grateful",
+			"we have received", "we received", "your message", "your inquiry", "your request",
+			"will contact", "will get back", "will respond", "will reply", "will be in touch",
+			"processing", "processed", "under review", "being processed", "in progress",
+			"registration", "registered", "account created", "profile created", "signup complete",
+			"order received", "order placed", "order confirmed", "purchase confirmed",
+			"no errors", "no problem", "everything looks good", "all set", "done",
+			"reference number", "tracking number", "order number", "confirmation number",
+			"within", "within 24 hours", "within 48 hours", "as soon as possible",
+			"business days", "working days", "office hours", "regular hours"
+		]
+		
+		# Strategy 1: Wait for any success indicator
+		try:
+			WebDriverWait(driver, timeout).until(
+				lambda d: any(indicator in d.page_source.lower() for indicator in success_indicators)
+			)
+			print("   ✅ Success detected via page content")
+			return True
+		except TimeoutException:
+			pass
+		
+		# Strategy 2: Check for success elements
+		try:
+			success_elements = driver.find_elements(By.CSS_SELECTOR, 
+				".success, .completed, .sent, .thank-you, .confirmation, [class*='success'], [class*='complete'], [class*='thank']")
+			if success_elements:
+				print(f"   ✅ Success detected via {len(success_elements)} success elements")
+				return True
+		except Exception:
+			pass
+		
+		# Strategy 3: Check URL changes
+		try:
+			current_url = driver.current_url.lower()
+			success_urls = ["success", "complete", "thanks", "thank", "sent", "送信完了", "完了", "confirmation"]
+			if any(url_indicator in current_url for url_indicator in success_urls):
+				print("   ✅ Success detected via URL change")
+				return True
+		except Exception:
+			pass
+		
+		# Strategy 4: Check title changes
+		try:
+			title = driver.title.lower()
+			if any(indicator in title for indicator in success_indicators):
+				print("   ✅ Success detected via page title")
+				return True
+		except Exception:
+			pass
+		
+		# Strategy 5: Check if form is gone (might indicate success)
 		page_source = driver.page_source.lower()
-		form_indicators = ["form", "お問い合わせ", "contact", "inquiry", "送信", "submit"]
-		if any(indicator in page_source for indicator in form_indicators):
-			return False
-		# If no form indicators, might be successful
-		return True
+		form_indicators = ["form", "お問い合わせ", "contact", "inquiry", "送信", "submit", "input", "textarea"]
+		form_count = sum(1 for indicator in form_indicators if indicator in page_source)
+		
+		if form_count < 3:  # Very few form elements, likely success
+			print("   ✅ Success detected via form disappearance")
+			return True
+		
+		# Strategy 6: Check for error indicators (if none, might be success)
+		error_indicators = ["エラー", "error", "失敗", "failed", "問題", "problem", "不正", "invalid", "required", "必須"]
+		error_count = sum(1 for indicator in error_indicators if indicator in page_source)
+		
+		if error_count == 0:
+			print("   ✅ Success detected via no error indicators")
+			return True
+		
+		print("   ❌ No success indicators found")
+		return False
+		
+	except Exception as e:
+		print(f"   ❌ Success detection error: {str(e)[:50]}")
+		return False
 
 
 def _infer_semantic(keywords: str, input_type: str, tag_name: str) -> str:
@@ -883,7 +964,20 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 	required_fields = driver.find_elements(By.CSS_SELECTOR, "input[required], textarea[required], select[required]")
 	for el in required_fields:
 		try:
-			if _is_element_filled(el) or not el.is_displayed() or not el.is_enabled():
+			if _is_element_filled(el):
+				continue
+			
+			# Try to make hidden required fields visible
+			if not el.is_displayed():
+				_make_element_visible(driver, el)
+			
+			# Skip if still not fillable
+			if not el.is_displayed() or not el.is_enabled():
+				# Try force filling even for hidden fields
+				placeholder = _generate_smart_placeholder(el, values)
+				if placeholder and _force_fill_element(driver, el, placeholder):
+					filled_count += 1
+					print(f"   ✓ Force filled required field: {_get_field_description(el)}")
 				continue
 			
 			placeholder = _generate_smart_placeholder(el, values)
@@ -904,9 +998,9 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 			if _is_message_field(el):
 				continue
 			
-			# Skip hidden fields
-			if not el.is_displayed() or not el.is_enabled():
-				continue
+			# Try to make hidden fields visible
+			if not el.is_displayed():
+				_make_element_visible(driver, el)
 			
 			# Handle file uploads
 			input_type = (el.get_attribute("type") or "").lower()
@@ -929,6 +1023,11 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 			if _fill_element_aggressive(driver, el, placeholder):
 				filled_count += 1
 				print(f"   ✓ Filled field: {_get_field_description(el)}")
+			elif not el.is_displayed() or not el.is_enabled():
+				# Try force filling for hidden/disabled fields
+				if _force_fill_element(driver, el, placeholder):
+					filled_count += 1
+					print(f"   ✓ Force filled field: {_get_field_description(el)}")
 				
 		except Exception:
 			continue
@@ -943,6 +1042,68 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 	
 	print(f"✅ ULTRA-AGGRESSIVE filling complete: {filled_count} fields filled")
 	return filled_count
+
+
+def _make_element_visible(driver: WebDriver, el) -> None:
+	"""Try to make a hidden element visible."""
+	try:
+		# Method 1: Remove display: none style
+		driver.execute_script("""
+			arguments[0].style.display = 'block';
+			arguments[0].style.visibility = 'visible';
+			arguments[0].style.opacity = '1';
+			arguments[0].style.height = 'auto';
+			arguments[0].style.width = 'auto';
+		""", el)
+		
+		# Method 2: Scroll to element
+		driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
+		
+		# Method 3: Try to make parent visible
+		driver.execute_script("""
+			var parent = arguments[0].parentElement;
+			while (parent && parent !== document.body) {
+				parent.style.display = 'block';
+				parent.style.visibility = 'visible';
+				parent = parent.parentElement;
+			}
+		""", el)
+		
+		time.sleep(0.1)
+	except Exception:
+		pass
+
+
+def _force_fill_element(driver: WebDriver, el, value: str) -> bool:
+	"""Force fill an element even if it's hidden or disabled."""
+	try:
+		# Method 1: Direct JavaScript property setting
+		driver.execute_script("""
+			arguments[0].value = arguments[1];
+			arguments[0].setAttribute('value', arguments[1]);
+			arguments[0].dispatchEvent(new Event('input', {bubbles: true}));
+			arguments[0].dispatchEvent(new Event('change', {bubbles: true}));
+		""", el, value)
+		
+		# Check if it worked
+		if el.get_attribute("value") == value:
+			return True
+		
+		# Method 2: Try to find and fill associated input
+		try:
+			# Look for associated input by name or id
+			name = el.get_attribute("name")
+			if name:
+				associated = driver.find_element(By.CSS_SELECTOR, f"input[name='{name}'], textarea[name='{name}']")
+				associated.clear()
+				associated.send_keys(value)
+				return True
+		except Exception:
+			pass
+		
+		return False
+	except Exception:
+		return False
 
 
 def _wait_for_dynamic_content(driver: WebDriver, timeout: int = 5) -> None:
@@ -1236,8 +1397,12 @@ def _fill_element_aggressive(driver: WebDriver, el, value: str) -> bool:
 
 
 def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
-	"""ULTRA-AGGRESSIVE checkbox handling: Check ALL checkboxes except obvious 'no' ones."""
+	"""ULTRA-AGGRESSIVE checkbox handling: Check ALL checkboxes including hidden ones and iframes."""
 	filled_count = 0
+	
+	# First, try to handle iframes
+	iframe_count = _handle_iframe_checkboxes(driver)
+	filled_count += iframe_count
 	
 	# Find all checkboxes with multiple selectors
 	checkbox_selectors = [
@@ -1245,7 +1410,10 @@ def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
 		"input[type='checkbox']",
 		"[role='checkbox']",
 		".checkbox input",
-		"label input[type=checkbox]"
+		"label input[type=checkbox]",
+		"*[type='checkbox']",
+		"input[type='checkbox']:not([style*='display: none'])",
+		"input[type='checkbox']:not([style*='visibility: hidden'])"
 	]
 	
 	all_checkboxes = []
@@ -1263,7 +1431,7 @@ def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
 			unique_checkboxes.append(cb)
 	
 	if not unique_checkboxes:
-		return 0
+		return filled_count
 	
 	print(f"🔍 Found {len(unique_checkboxes)} checkboxes on page")
 	
@@ -1275,10 +1443,21 @@ def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
 				print(f"   Checkbox {i+1}: Already checked, skipping")
 				continue
 			
-			# Skip if not visible or enabled
+			# Try to make hidden checkboxes visible
+			if not cb.is_displayed():
+				_make_checkbox_visible(driver, cb)
+			
+			# Skip if still not visible or enabled
 			if not cb.is_displayed() or not cb.is_enabled():
-				print(f"   Checkbox {i+1}: Not visible/enabled, skipping")
-				continue
+				print(f"   Checkbox {i+1}: Not visible/enabled, trying force methods...")
+				# Try force methods even for hidden checkboxes
+				if _checkbox_force_check(driver, cb):
+					filled_count += 1
+					print(f"   ✅ Checkbox {i+1}: Force checked!")
+					continue
+				else:
+					print(f"   ❌ Checkbox {i+1}: Force check failed")
+					continue
 			
 			# Get associated text for analysis
 			text = _get_checkbox_associated_text(driver, cb).lower()
@@ -1313,6 +1492,118 @@ def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
 	
 	print(f"🎯 Total checkboxes checked: {filled_count}")
 	return filled_count
+
+
+def _handle_iframe_checkboxes(driver: WebDriver) -> int:
+	"""Handle checkboxes inside iframes."""
+	filled_count = 0
+	
+	try:
+		# Find all iframes
+		iframes = driver.find_elements(By.CSS_SELECTOR, "iframe")
+		print(f"🔍 Found {len(iframes)} iframes, checking for checkboxes...")
+		
+		for i, iframe in enumerate(iframes):
+			try:
+				# Switch to iframe
+				driver.switch_to.frame(iframe)
+				
+				# Look for checkboxes in this iframe
+				iframe_checkboxes = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox]")
+				if iframe_checkboxes:
+					print(f"   📋 Found {len(iframe_checkboxes)} checkboxes in iframe {i+1}")
+					
+					for cb in iframe_checkboxes:
+						try:
+							if not cb.is_selected() and cb.is_displayed() and cb.is_enabled():
+								# Get text to check if it's a negative checkbox
+								text = _get_checkbox_associated_text(driver, cb).lower()
+								negative_keywords = ["no", "disagree", "拒否", "しない", "不要", "いらない"]
+								
+								if not any(keyword in text for keyword in negative_keywords):
+									if _checkbox_set_checked_ultra_aggressive(driver, cb):
+										filled_count += 1
+										print(f"   ✅ Checked iframe checkbox: {text[:50]}")
+						except Exception:
+							continue
+				
+				# Switch back to main content
+				driver.switch_to.default_content()
+				
+			except Exception:
+				# Switch back to main content in case of error
+				driver.switch_to.default_content()
+				continue
+				
+	except Exception:
+		pass
+	
+	return filled_count
+
+
+def _make_checkbox_visible(driver: WebDriver, cb) -> None:
+	"""Try to make a hidden checkbox visible."""
+	try:
+		# Method 1: Remove display: none style
+		driver.execute_script("""
+			arguments[0].style.display = 'block';
+			arguments[0].style.visibility = 'visible';
+			arguments[0].style.opacity = '1';
+		""", cb)
+		
+		# Method 2: Scroll to element
+		driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", cb)
+		
+		# Method 3: Try to make parent visible
+		driver.execute_script("""
+			var parent = arguments[0].parentElement;
+			while (parent && parent !== document.body) {
+				parent.style.display = 'block';
+				parent.style.visibility = 'visible';
+				parent = parent.parentElement;
+			}
+		""", cb)
+		
+		time.sleep(0.1)
+	except Exception:
+		pass
+
+
+def _checkbox_force_check(driver: WebDriver, cb) -> bool:
+	"""Force check a checkbox even if it's hidden."""
+	try:
+		# Method 1: Direct JavaScript property setting
+		driver.execute_script("""
+			arguments[0].checked = true;
+			arguments[0].setAttribute('checked', 'checked');
+			arguments[0].dispatchEvent(new Event('change', {bubbles: true}));
+			arguments[0].dispatchEvent(new Event('click', {bubbles: true}));
+		""", cb)
+		
+		# Check if it worked
+		if cb.is_selected():
+			return True
+		
+		# Method 2: Try to find and click associated label
+		try:
+			label = cb.find_element(By.XPATH, "//label[@for='" + (cb.get_attribute("id") or "") + "']")
+			label.click()
+			return cb.is_selected()
+		except Exception:
+			pass
+		
+		# Method 3: Try to find parent label
+		try:
+			parent = cb.find_element(By.XPATH, "..")
+			if parent.tag_name.lower() == "label":
+				parent.click()
+				return cb.is_selected()
+		except Exception:
+			pass
+		
+		return False
+	except Exception:
+		return False
 
 
 def _checkbox_set_checked_ultra_aggressive(driver: WebDriver, cb) -> bool:

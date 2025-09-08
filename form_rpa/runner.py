@@ -108,6 +108,31 @@ def _ultra_aggressive_submit(driver, use_multistep_submit: bool) -> bool:
 	return False
 
 
+def _handle_javascript_alerts(driver) -> bool:
+	"""Handle JavaScript alerts and confirmations."""
+	try:
+		alert = driver.switch_to.alert
+		alert_text = alert.text
+		print(f"   🚨 JavaScript Alert: {alert_text}")
+		
+		# Handle different types of alerts
+		if any(keyword in alert_text.lower() for keyword in ["送信", "submit", "確認", "confirm", "ok", "yes", "はい"]):
+			alert.accept()
+			print("   ✓ Accepted alert")
+			return True
+		elif any(keyword in alert_text.lower() for keyword in ["キャンセル", "cancel", "no", "いいえ"]):
+			alert.dismiss()
+			print("   ✗ Dismissed alert")
+			return False
+		else:
+			# Default to accept for unknown alerts
+			alert.accept()
+			print("   ✓ Accepted unknown alert")
+			return True
+	except Exception:
+		return False
+
+
 def process_leads(
 	input_path: str,
 	template_path: str,
@@ -246,6 +271,10 @@ def process_leads(
 				print(f"   🔍 Looking for submit button...")
 				clicked = _ultra_aggressive_submit(driver, use_multistep_submit)
 				
+				# Handle JavaScript alerts that might appear
+				if clicked:
+					_handle_javascript_alerts(driver)
+				
 				# If required errors, try to fill missing required fields
 				if (not preview) and detect_required_errors(driver):
 					print(f"   ⚠️  Required field errors detected, trying to fill missing fields...")
@@ -283,15 +312,69 @@ def process_leads(
 					# Retry submit with multiple strategies
 					print(f"   🔄 Retrying submit after filling required fields...")
 					clicked = clicked or _ultra_aggressive_submit(driver, use_multistep_submit)
+					
+					# Handle alerts again after retry
+					if clicked:
+						_handle_javascript_alerts(driver)
 
 				if not clicked:
-					lead_result["status"] = "failed"
-					lead_result["detail"] = "Submit button not found"
-					append_log(log_path, lead_result)
-					_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": "submit_not_found"})
-					processed_leads.append(lead_result)
-					print(f"   ❌ Failed: Submit button not found")
-					continue
+					# ULTRA-AGGRESSIVE retry: Try multiple strategies before giving up
+					print(f"   🔄 ULTRA-AGGRESSIVE retry: Trying all possible submission methods...")
+					
+					# Retry 1: Wait and try again
+					time.sleep(3)
+					clicked = _ultra_aggressive_submit(driver, use_multistep_submit)
+					
+					# Retry 2: Try JavaScript form submission directly
+					if not clicked:
+						try:
+							forms = driver.find_elements(By.CSS_SELECTOR, "form")
+							for form in forms:
+								driver.execute_script("arguments[0].submit();", form)
+								print("   ✓ Force submitted form via JavaScript")
+								clicked = True
+								break
+						except Exception:
+							pass
+					
+					# Retry 3: Try pressing Enter on all form elements
+					if not clicked:
+						try:
+							from selenium.webdriver.common.keys import Keys
+							form_elements = driver.find_elements(By.CSS_SELECTOR, "form input, form textarea, form select")
+							for el in form_elements:
+								try:
+									el.send_keys(Keys.RETURN)
+									print("   ✓ Pressed Enter on form element")
+									clicked = True
+									break
+								except Exception:
+									continue
+						except Exception:
+							pass
+					
+					# Retry 4: Try clicking any clickable element
+					if not clicked:
+						clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit], a, [onclick], [role=button]")
+						for el in clickable_elements:
+							try:
+								if el.is_displayed() and el.is_enabled():
+									driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
+									el.click()
+									print("   ✓ Clicked clickable element")
+									clicked = True
+									break
+							except Exception:
+								continue
+					
+					if not clicked:
+						lead_result["status"] = "failed"
+						lead_result["detail"] = "Submit button not found after all retry attempts"
+						append_log(log_path, lead_result)
+						_emit({"event": "failed", "company_name": company_name, "url": inquiry_url, "reason": "submit_not_found"})
+						processed_leads.append(lead_result)
+						print(f"   ❌ Failed: Submit button not found after all retry attempts")
+						continue
 
 				print(f"   ⏳ Waiting for post-submit confirmation...")
 				submission_successful = wait_post_submit(driver)
