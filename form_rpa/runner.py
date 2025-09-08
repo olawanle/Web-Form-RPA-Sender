@@ -9,7 +9,7 @@ from typing import Callable, Dict, Optional
 from selenium.common.exceptions import WebDriverException, NoSuchElementException
 from selenium.webdriver.common.by import By
 
-from .ai_assist import suggest_selectors, generate_values
+# AI assist removed - using smart traditional form filling
 from .browser import create_driver
 from .captcha import is_captcha_present
 from .form_filler import fill_fields, click_submit, wait_post_submit, multi_step_submit, detect_required_errors, collect_required_fields, auto_fill_remaining
@@ -41,47 +41,7 @@ def _wait_dom_ready(driver, timeout: int = 15):
 	return False
 
 
-def _apply_ai_selectors(driver, selectors: Dict[str, object], values: Dict[str, str]) -> bool:
-	success = False
-	def _find(css: str):
-		try:
-			return driver.find_element(By.CSS_SELECTOR, css)
-		except NoSuchElementException:
-			return None
-	# Fill known fields
-	for key in ["name", "company", "email", "phone", "subject", "message"]:
-		css = selectors.get(key)
-		if isinstance(css, str) and css.strip():
-			el = _find(css)
-			if el is not None and values.get(key):
-				try:
-					el.clear()
-					el.send_keys(values[key])
-					success = True
-				except Exception:
-					pass
-	# Consents
-	consents = selectors.get("consents")
-	if isinstance(consents, list):
-		for css in consents:
-			el = _find(css)
-			if el is not None:
-				try:
-					if not el.is_selected():
-						el.click()
-				except Exception:
-					pass
-	# Submit
-	submit_css = selectors.get("submit")
-	if isinstance(submit_css, str) and submit_css.strip():
-		btn = _find(submit_css)
-		if btn is not None:
-			try:
-				btn.click()
-				success = True
-			except Exception:
-				pass
-	return success
+# AI assist functions removed - using smart traditional form filling
 
 
 def process_leads(
@@ -98,9 +58,7 @@ def process_leads(
 	screenshot_dir: Optional[str] = None,
 	auto_consent: bool = True,
 	use_multistep_submit: bool = True,
-	ai_assist_mode: str = "never",  # default off to prevent API errors
-	openrouter_api_key: Optional[str] = None,
-	ai_fill_required: bool = True,
+	# AI assist removed - using smart traditional form filling
 	browser: str = "auto",
 	remote_url: Optional[str] = None,
 	on_progress: Optional[ProgressCallback] = None,
@@ -209,13 +167,7 @@ def process_leads(
 				# Fill all remaining fields with placeholders except message
 				auto_fill_remaining(driver, skip_message=True)
 
-				if ai_assist_mode in ("always",) and openrouter_api_key:
-					try:
-						html = driver.page_source
-						selectors = suggest_selectors(html, api_key=openrouter_api_key)
-						_apply_ai_selectors(driver, selectors, values)
-					except Exception as e:
-						print(f"   ⚠️  AI assist failed: {str(e)[:100]}")
+				# AI assist removed - using smart traditional form filling
 
 				if preview:
 					lead_result["status"] = "preview"
@@ -229,53 +181,45 @@ def process_leads(
 
 				print(f"   🔍 Looking for submit button...")
 				clicked = multi_step_submit(driver) if use_multistep_submit else click_submit(driver)
-				if not clicked and ai_assist_mode in ("failure_only",) and openrouter_api_key:
-					try:
-						print(f"   🤖 Trying AI assist for submit...")
-						html = driver.page_source
-						selectors = suggest_selectors(html, api_key=openrouter_api_key)
-						if _apply_ai_selectors(driver, selectors, values):
-							clicked = True
-					except Exception as e:
-						print(f"   ⚠️  AI assist failed: {str(e)[:100]}")
+				# AI assist removed - using smart traditional form filling
 
-				# If required errors, try AI to generate values and resubmit once
-				if (not preview) and ai_fill_required and detect_required_errors(driver) and openrouter_api_key:
-					try:
-						print(f"   ⚠️  Required field errors detected, trying AI fill...")
-						required = collect_required_fields(driver)
-						gen = generate_values(required, {"company_name": company_name, "contact_name": contact_name}, api_key=openrouter_api_key)
-						# Fill generated values by name/id
-						for item in required:
-							key = item.get("key")
-							val = gen.get(key, "")
-							if not val:
-								continue
-							# Try select by name or id
-							name = item.get("name") or ""
-							fid = item.get("id") or ""
-							el = None
-							if name:
-								try:
-									el = driver.find_element(By.NAME, name)
-								except Exception:
-									pass
-							if el is None and fid:
-								try:
-									el = driver.find_element(By.ID, fid)
-								except Exception:
-									pass
-							if el is not None:
-								try:
-									el.clear()
-									el.send_keys(val)
-								except Exception:
-									pass
-						# Retry submit
-						print(f"   🔄 Retrying submit after AI fill...")
-						clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
-					except Exception as e:
-						print(f"   ⚠️  AI fill failed: {str(e)[:100]}")
+				# If required errors, try to fill missing required fields
+				if (not preview) and detect_required_errors(driver):
+					print(f"   ⚠️  Required field errors detected, trying to fill missing fields...")
+					# Try to fill any empty required fields with smart placeholders
+					required_fields = driver.find_elements(By.CSS_SELECTOR, "input[required], textarea[required], select[required]")
+					for field in required_fields:
+						try:
+							if not field.get_attribute("value") and not field.text:
+								# Generate smart placeholder based on field type and name
+								field_type = field.get_attribute("type") or "text"
+								field_name = (field.get_attribute("name") or "").lower()
+								field_id = (field.get_attribute("id") or "").lower()
+								
+								placeholder = ""
+								if field_type == "email" or "email" in field_name or "mail" in field_name:
+									placeholder = "test@example.com"
+								elif field_type == "tel" or "phone" in field_name or "tel" in field_name:
+									placeholder = "03-1234-5678"
+								elif "name" in field_name or "氏名" in field_name:
+									placeholder = "テスト太郎"
+								elif "company" in field_name or "会社" in field_name:
+									placeholder = "テスト株式会社"
+								elif "address" in field_name or "住所" in field_name:
+									placeholder = "東京都渋谷区1-1-1"
+								else:
+									placeholder = "テストデータ"
+								
+								if placeholder:
+									field.clear()
+									field.send_keys(placeholder)
+									print(f"   ✓ Filled required field: {field_name or field_id}")
+						except Exception:
+							continue
+					
+					# Retry submit
+					print(f"   🔄 Retrying submit after filling required fields...")
+					clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
 
 				if not clicked:
 					lead_result["status"] = "failed"

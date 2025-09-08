@@ -5,3 +5,5 @@ __pycache__/
 send_log*.csv
 screenshots/
 shots_ai/
+dist/
+build/

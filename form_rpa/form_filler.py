@@ -776,19 +776,37 @@ def auto_fill_remaining(driver: WebDriver, *, skip_message: bool = True) -> int:
 
 
 def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, str]) -> int:
-	"""Aggressively fill ALL remaining empty form fields with placeholders."""
+	"""SMART form filling: intelligently fill all remaining empty form fields."""
 	filled_count = 0
+	
+	print("🔍 Starting smart field filling...")
 	
 	# Get all form elements with more comprehensive selectors
 	all_inputs = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select, [contenteditable='true']")
+	print(f"   Found {len(all_inputs)} form elements")
 	
+	# First pass: Fill obvious required fields
+	required_fields = driver.find_elements(By.CSS_SELECTOR, "input[required], textarea[required], select[required]")
+	for el in required_fields:
+		try:
+			if _is_element_filled(el) or not el.is_displayed() or not el.is_enabled():
+				continue
+			
+			placeholder = _generate_smart_placeholder(el, values)
+			if placeholder and _fill_element_aggressive(driver, el, placeholder):
+				filled_count += 1
+				print(f"   ✓ Filled required field: {_get_field_description(el)}")
+		except Exception:
+			continue
+	
+	# Second pass: Fill other empty fields
 	for el in all_inputs:
 		try:
 			# Skip if already filled or not fillable
 			if _is_element_filled(el):
 				continue
 			
-			# Skip message fields if requested
+			# Skip message fields
 			if _is_message_field(el):
 				continue
 			
@@ -801,14 +819,15 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 			if input_type in ["hidden", "submit", "button", "reset", "image", "file"]:
 				continue
 			
-			# Generate appropriate placeholder
-			placeholder = _generate_placeholder_for_element(el, values)
+			# Generate smart placeholder
+			placeholder = _generate_smart_placeholder(el, values)
 			if not placeholder:
 				continue
 			
 			# Try to fill the element
 			if _fill_element_aggressive(driver, el, placeholder):
 				filled_count += 1
+				print(f"   ✓ Filled field: {_get_field_description(el)}")
 				
 		except Exception:
 			continue
@@ -821,6 +840,7 @@ def _fill_all_remaining_fields_aggressive(driver: WebDriver, values: Dict[str, s
 	select_count = _fill_all_selects_aggressive(driver)
 	filled_count += select_count
 	
+	print(f"✅ Smart filling complete: {filled_count} fields filled")
 	return filled_count
 
 
@@ -894,6 +914,100 @@ def _is_message_field(el) -> bool:
 	text = " ".join(attrs).lower()
 	message_hints = ["message", "comment", "body", "content", "お問い合わせ", "内容", "本文", "ご質問"]
 	return any(hint in text for hint in message_hints)
+
+
+def _generate_smart_placeholder(el, values: Dict[str, str]) -> Optional[str]:
+	"""Generate smart placeholder based on field context and type."""
+	tag = el.tag_name.lower()
+	input_type = (el.get_attribute("type") or "text").lower()
+	
+	# Get field context
+	name = (el.get_attribute("name") or "").lower()
+	id_attr = (el.get_attribute("id") or "").lower()
+	placeholder = (el.get_attribute("placeholder") or "").lower()
+	label_text = _get_field_label_text(el).lower()
+	
+	# Combine all context
+	context = f"{name} {id_attr} {placeholder} {label_text}"
+	
+	# Use existing values if available and appropriate
+	if input_type == "email" and values.get("email"):
+		return values["email"]
+	elif input_type == "tel" and values.get("phone"):
+		return values["phone"]
+	elif "name" in context and values.get("name"):
+		return values["name"]
+	elif "company" in context and values.get("company"):
+		return values["company"]
+	
+	# Generate smart placeholders based on context
+	if input_type == "email" or "email" in context or "mail" in context:
+		return "test@example.com"
+	elif input_type == "tel" or "phone" in context or "tel" in context:
+		return "03-1234-5678"
+	elif input_type in ["number", "range"]:
+		return "1"
+	elif input_type == "url":
+		return "https://example.com"
+	elif input_type == "date":
+		return "2024-01-01"
+	elif input_type == "time":
+		return "09:00"
+	elif "name" in context or "氏名" in context or "お名前" in context:
+		return "テスト太郎"
+	elif "company" in context or "会社" in context or "法人" in context:
+		return "テスト株式会社"
+	elif "address" in context or "住所" in context:
+		return "東京都渋谷区1-1-1"
+	elif "zip" in context or "郵便" in context or "〒" in context:
+		return "150-0001"
+	elif "subject" in context or "件名" in context:
+		return "お問い合わせ"
+	elif "message" in context or "メッセージ" in context or "内容" in context:
+		return None  # Skip message fields
+	else:
+		return "テストデータ"
+
+
+def _get_field_description(el) -> str:
+	"""Get a human-readable description of a field."""
+	name = el.get_attribute("name") or ""
+	id_attr = el.get_attribute("id") or ""
+	placeholder = el.get_attribute("placeholder") or ""
+	label_text = _get_field_label_text(el)
+	
+	# Return the most descriptive identifier
+	if label_text:
+		return f"'{label_text}'"
+	elif placeholder:
+		return f"placeholder='{placeholder}'"
+	elif name:
+		return f"name='{name}'"
+	elif id_attr:
+		return f"id='{id_attr}'"
+	else:
+		return f"<{el.tag_name}>"
+
+
+def _get_field_label_text(el) -> str:
+	"""Get the text of a field's label."""
+	try:
+		# Try to find label by 'for' attribute
+		field_id = el.get_attribute("id")
+		if field_id:
+			label = el.find_element(By.XPATH, f"//label[@for='{field_id}']")
+			return label.text.strip()
+	except Exception:
+		pass
+	
+	try:
+		# Try to find parent label
+		label = el.find_element(By.XPATH, "ancestor::label")
+		return label.text.strip()
+	except Exception:
+		pass
+	
+	return ""
 
 
 def _generate_placeholder_for_element(el, values: Dict[str, str]) -> str:
