@@ -43,6 +43,70 @@ def _wait_dom_ready(driver, timeout: int = 15):
 
 # AI assist functions removed - using smart traditional form filling
 
+def _ultra_aggressive_submit(driver, use_multistep_submit: bool) -> bool:
+	"""ULTRA-AGGRESSIVE submit with multiple retry strategies for 100% success."""
+	from .form_filler import click_submit, multi_step_submit
+	
+	# Strategy 1: Try normal submit
+	if use_multistep_submit:
+		if multi_step_submit(driver):
+			return True
+	else:
+		if click_submit(driver):
+			return True
+	
+	# Strategy 2: Wait and retry (for dynamic content)
+	time.sleep(2)
+	if use_multistep_submit:
+		if multi_step_submit(driver):
+			return True
+	else:
+		if click_submit(driver):
+			return True
+	
+	# Strategy 3: Try JavaScript form submission
+	try:
+		forms = driver.find_elements(By.CSS_SELECTOR, "form")
+		for form in forms:
+			try:
+				driver.execute_script("arguments[0].submit();", form)
+				print("   ✓ Submitted form via JavaScript")
+				return True
+			except Exception:
+				continue
+	except Exception:
+		pass
+	
+	# Strategy 4: Try pressing Enter on form elements
+	try:
+		from selenium.webdriver.common.keys import Keys
+		form_elements = driver.find_elements(By.CSS_SELECTOR, "form input, form textarea, form select")
+		for el in form_elements:
+			try:
+				el.send_keys(Keys.RETURN)
+				print("   ✓ Pressed Enter on form element")
+				return True
+			except Exception:
+				continue
+	except Exception:
+		pass
+	
+	# Strategy 5: Try clicking any button in forms
+	forms = driver.find_elements(By.CSS_SELECTOR, "form")
+	for form in forms:
+		buttons = form.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit], a")
+		for btn in buttons:
+			try:
+				if btn.is_displayed() and btn.is_enabled():
+					driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+					btn.click()
+					print("   ✓ Clicked form button")
+					return True
+			except Exception:
+				continue
+	
+	return False
+
 
 def process_leads(
 	input_path: str,
@@ -180,9 +244,8 @@ def process_leads(
 					continue
 
 				print(f"   🔍 Looking for submit button...")
-				clicked = multi_step_submit(driver) if use_multistep_submit else click_submit(driver)
-				# AI assist removed - using smart traditional form filling
-
+				clicked = _ultra_aggressive_submit(driver, use_multistep_submit)
+				
 				# If required errors, try to fill missing required fields
 				if (not preview) and detect_required_errors(driver):
 					print(f"   ⚠️  Required field errors detected, trying to fill missing fields...")
@@ -217,9 +280,9 @@ def process_leads(
 						except Exception:
 							continue
 					
-					# Retry submit
+					# Retry submit with multiple strategies
 					print(f"   🔄 Retrying submit after filling required fields...")
-					clicked = clicked or (multi_step_submit(driver) if use_multistep_submit else click_submit(driver))
+					clicked = clicked or _ultra_aggressive_submit(driver, use_multistep_submit)
 
 				if not clicked:
 					lead_result["status"] = "failed"
