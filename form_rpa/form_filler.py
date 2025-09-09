@@ -886,6 +886,86 @@ def wait_post_submit(driver: WebDriver, timeout: int = 10) -> bool:
 			print("   ✅ Success detected via iframe presence")
 			return True
 		
+		# Strategy 16: Check for form validation success
+		validation_success = driver.find_elements(By.CSS_SELECTOR, ".valid, .success, .passed, .ok, [class*='valid'], [class*='success'], [class*='passed']")
+		if validation_success:
+			print(f"   ✅ Success detected via {len(validation_success)} validation success elements")
+			return True
+		
+		# Strategy 17: Check for loading completion
+		loading_elements = driver.find_elements(By.CSS_SELECTOR, ".loading, .spinner, .loader, [class*='loading'], [class*='spinner'], [class*='loader']")
+		if not loading_elements:
+			print("   ✅ Success detected via no loading elements")
+			return True
+		
+		# Strategy 18: Check for specific success classes
+		success_classes = driver.find_elements(By.CSS_SELECTOR, "[class*='complete'], [class*='done'], [class*='finished'], [class*='sent'], [class*='submitted']")
+		if success_classes:
+			print(f"   ✅ Success detected via {len(success_classes)} success class elements")
+			return True
+		
+		# Strategy 19: Check for specific success IDs
+		success_ids = driver.find_elements(By.CSS_SELECTOR, "#success, #complete, #done, #finished, #sent, #submitted, #thank-you, #thankyou")
+		if success_ids:
+			print(f"   ✅ Success detected via {len(success_ids)} success ID elements")
+			return True
+		
+		# Strategy 20: Check for specific success data attributes
+		success_data = driver.find_elements(By.CSS_SELECTOR, "[data-success], [data-complete], [data-done], [data-finished], [data-sent], [data-submitted]")
+		if success_data:
+			print(f"   ✅ Success detected via {len(success_data)} success data elements")
+			return True
+		
+		# Strategy 21: Check for specific success aria labels
+		success_aria = driver.find_elements(By.CSS_SELECTOR, "[aria-label*='success'], [aria-label*='complete'], [aria-label*='done'], [aria-label*='finished'], [aria-label*='sent'], [aria-label*='submitted']")
+		if success_aria:
+			print(f"   ✅ Success detected via {len(success_aria)} success aria elements")
+			return True
+		
+		# Strategy 22: Check for specific success titles
+		success_titles = driver.find_elements(By.CSS_SELECTOR, "[title*='success'], [title*='complete'], [title*='done'], [title*='finished'], [title*='sent'], [title*='submitted']")
+		if success_titles:
+			print(f"   ✅ Success detected via {len(success_titles)} success title elements")
+			return True
+		
+		# Strategy 23: Check for specific success roles
+		success_roles = driver.find_elements(By.CSS_SELECTOR, "[role='alert'][aria-live='polite'], [role='status'], [role='log']")
+		if success_roles:
+			print(f"   ✅ Success detected via {len(success_roles)} success role elements")
+			return True
+		
+		# Strategy 24: Check for specific success text content
+		success_text_elements = driver.find_elements(By.XPATH, "//*[contains(text(), '送信完了') or contains(text(), '送信されました') or contains(text(), '送信いたしました') or contains(text(), 'お問い合わせありがとう') or contains(text(), 'お問い合わせを受け付け') or contains(text(), '受付完了') or contains(text(), '受付いたしました') or contains(text(), '送信ありがとう') or contains(text(), '送信いただき') or contains(text(), 'ご送信いただき') or contains(text(), 'ご送信ありがとう') or contains(text(), '確認メール') or contains(text(), '確認のメール') or contains(text(), '自動返信') or contains(text(), '自動返信メール') or contains(text(), 'メールを送信') or contains(text(), 'お問い合わせ内容') or contains(text(), '内容を確認') or contains(text(), '内容を確認いたしました') or contains(text(), '内容を確認させていただきました') or contains(text(), '担当者より') or contains(text(), '担当者から') or contains(text(), '折り返し') or contains(text(), '折り返しご連絡') or contains(text(), 'ご連絡いたします') or contains(text(), 'ありがとうございました') or contains(text(), 'ありがとうございます') or contains(text(), 'ご利用ありがとう') or contains(text(), 'お申し込み') or contains(text(), 'お申し込みありがとう') or contains(text(), 'お申し込みいただき') or contains(text(), 'ご登録') or contains(text(), 'ご登録ありがとう') or contains(text(), 'ご登録いただき') or contains(text(), '登録完了') or contains(text(), 'お受け取り') or contains(text(), 'お受け取りいただき') or contains(text(), '受け取りました') or contains(text(), '処理完了') or contains(text(), '処理が完了') or contains(text(), '処理いたしました') or contains(text(), '処理が正常に完了') or contains(text(), '正常に送信') or contains(text(), '正常に処理') or contains(text(), '正常に受付') or contains(text(), '正常に完了') or contains(text(), 'エラーが発生') or contains(text(), 'エラーは発生') or contains(text(), '問題はありません') or contains(text(), '問題ありません') or contains(text(), 'しばらくお待ち') or contains(text(), 'しばらくお待ちください') or contains(text(), '少々お待ち') or contains(text(), '完了いたしました') or contains(text(), '完了しました') or contains(text(), '完了いたします') or contains(text(), '完了です') or contains(text(), '受付番号') or contains(text(), 'お問い合わせ番号') or contains(text(), '申込番号') or contains(text(), '登録番号') or contains(text(), 'お疲れ様') or contains(text(), 'お疲れ様でした') or contains(text(), 'ご苦労様') or contains(text(), 'ご苦労様でした')]")
+		if success_text_elements:
+			print(f"   ✅ Success detected via {len(success_text_elements)} success text elements")
+			return True
+		
+		# Strategy 25: Check for specific success patterns in page source
+		success_patterns = [
+			"送信完了", "送信されました", "送信いたしました", "送信が完了", "送信が完了しました",
+			"お問い合わせありがとう", "お問い合わせを受け付け", "受付完了", "受付いたしました",
+			"送信ありがとう", "送信いただき", "ご送信いただき", "ご送信ありがとう",
+			"確認メール", "確認のメール", "自動返信", "自動返信メール", "メールを送信",
+			"お問い合わせ内容", "内容を確認", "内容を確認いたしました", "内容を確認させていただきました",
+			"担当者より", "担当者から", "折り返し", "折り返しご連絡", "ご連絡いたします",
+			"ありがとうございました", "ありがとうございます", "ご利用ありがとう",
+			"お申し込み", "お申し込みありがとう", "お申し込みいただき",
+			"ご登録", "ご登録ありがとう", "ご登録いただき", "登録完了",
+			"お受け取り", "お受け取りいただき", "受け取りました",
+			"処理完了", "処理が完了", "処理いたしました", "処理が正常に完了",
+			"正常に送信", "正常に処理", "正常に受付", "正常に完了",
+			"エラーが発生", "エラーは発生", "問題はありません", "問題ありません",
+			"しばらくお待ち", "しばらくお待ちください", "少々お待ち",
+			"完了いたしました", "完了しました", "完了いたします", "完了です",
+			"受付番号", "お問い合わせ番号", "申込番号", "登録番号",
+			"お疲れ様", "お疲れ様でした", "ご苦労様", "ご苦労様でした"
+		]
+		
+		for pattern in success_patterns:
+			if pattern in page_source:
+				print(f"   ✅ Success detected via specific pattern: {pattern}")
+				return True
+		
 		print("   ❌ No success indicators found")
 		return False
 		

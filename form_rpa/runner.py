@@ -109,7 +109,7 @@ def _ultra_aggressive_submit(driver, use_multistep_submit: bool) -> bool:
 
 
 def _handle_javascript_alerts(driver) -> bool:
-	"""ULTRA-AGGRESSIVE JavaScript alert handling with multiple strategies."""
+	"""ULTRA-AGGRESSIVE JavaScript alert handling with 10+ strategies."""
 	try:
 		# Strategy 1: Try to handle the alert
 		alert = driver.switch_to.alert
@@ -117,7 +117,7 @@ def _handle_javascript_alerts(driver) -> bool:
 		print(f"   🚨 JavaScript Alert: {alert_text}")
 		
 		# Handle different types of alerts
-		if any(keyword in alert_text.lower() for keyword in ["送信", "submit", "確認", "confirm", "ok", "yes", "はい", "よろしい", "続行", "proceed"]):
+		if any(keyword in alert_text.lower() for keyword in ["送信", "submit", "確認", "confirm", "ok", "yes", "はい", "よろしい", "続行", "proceed", "送信してもよろしい", "送信してもよろしいですか"]):
 			alert.accept()
 			print("   ✓ Accepted positive alert")
 			return True
@@ -137,6 +137,7 @@ def _handle_javascript_alerts(driver) -> bool:
 		try:
 			driver.switch_to.alert.dismiss()
 			print("   ✓ Dismissed alert via fallback")
+			return True
 		except Exception:
 			pass
 		
@@ -144,6 +145,77 @@ def _handle_javascript_alerts(driver) -> bool:
 		try:
 			driver.switch_to.alert.accept()
 			print("   ✓ Accepted alert via fallback")
+			return True
+		except Exception:
+			pass
+		
+		# Strategy 4: Try to handle alerts with JavaScript
+		try:
+			driver.execute_script("window.alert = function() {}; window.confirm = function() { return true; }; window.prompt = function() { return true; };")
+			print("   ✓ Disabled alerts via JavaScript")
+			return True
+		except Exception:
+			pass
+		
+		# Strategy 5: Try to handle alerts with window.alert override
+		try:
+			driver.execute_script("""
+				window.alert = function(msg) { console.log('Alert intercepted:', msg); };
+				window.confirm = function(msg) { console.log('Confirm intercepted:', msg); return true; };
+				window.prompt = function(msg) { console.log('Prompt intercepted:', msg); return true; };
+			""")
+			print("   ✓ Overrode alert functions via JavaScript")
+			return True
+		except Exception:
+			pass
+		
+		# Strategy 6: Try to handle alerts with event listeners
+		try:
+			driver.execute_script("""
+				window.addEventListener('beforeunload', function(e) { e.preventDefault(); });
+				window.addEventListener('unload', function(e) { e.preventDefault(); });
+			""")
+			print("   ✓ Added event listeners to prevent alerts")
+			return True
+		except Exception:
+			pass
+		
+		# Strategy 7: Try to handle alerts with timeout
+		try:
+			import time
+			time.sleep(0.5)
+			alert = driver.switch_to.alert
+			alert.accept()
+			print("   ✓ Accepted alert after timeout")
+			return True
+		except Exception:
+			pass
+		
+		# Strategy 8: Try to handle alerts with retry
+		for attempt in range(3):
+			try:
+				alert = driver.switch_to.alert
+				alert.accept()
+				print(f"   ✓ Accepted alert on attempt {attempt + 1}")
+				return True
+			except Exception:
+				time.sleep(0.2)
+				continue
+		
+		# Strategy 9: Try to handle alerts with different approach
+		try:
+			driver.execute_script("arguments[0].click();", driver.find_element(By.CSS_SELECTOR, "body"))
+			print("   ✓ Clicked body to dismiss alert")
+			return True
+		except Exception:
+			pass
+		
+		# Strategy 10: Try to handle alerts with key press
+		try:
+			from selenium.webdriver.common.keys import Keys
+			driver.find_element(By.CSS_SELECTOR, "body").send_keys(Keys.ENTER)
+			print("   ✓ Pressed Enter to dismiss alert")
+			return True
 		except Exception:
 			pass
 		
@@ -239,8 +311,22 @@ def process_leads(
 					# Store original URL for success detection
 					driver._original_url = inquiry_url
 					driver.get(inquiry_url)
-				except WebDriverException:
-					driver.quit()
+				except WebDriverException as e:
+					print(f"   ⚠️ WebDriver error: {str(e)[:50]}")
+					try:
+						driver.quit()
+					except Exception:
+						pass
+					driver = create_driver(browser=browser, headless=headless, remote_url=remote_url)
+					# Store original URL for success detection
+					driver._original_url = inquiry_url
+					driver.get(inquiry_url)
+				except Exception as e:
+					print(f"   ⚠️ General error: {str(e)[:50]}")
+					try:
+						driver.quit()
+					except Exception:
+						pass
 					driver = create_driver(browser=browser, headless=headless, remote_url=remote_url)
 					# Store original URL for success detection
 					driver._original_url = inquiry_url
@@ -447,12 +533,15 @@ def process_leads(
 				print(f"   ⏳ Waiting for post-submit confirmation...")
 				# Try multiple success detection attempts
 				submission_successful = False
-				for attempt in range(3):
-					print(f"   🔍 Success detection attempt {attempt + 1}/3...")
-					submission_successful = wait_post_submit(driver, timeout=15)
+				for attempt in range(5):
+					print(f"   🔍 Success detection attempt {attempt + 1}/5...")
+					submission_successful = wait_post_submit(driver, timeout=20)
 					if submission_successful:
 						break
-					time.sleep(2)
+					time.sleep(3)
+					
+					# Try to handle any alerts that might appear
+					_handle_javascript_alerts(driver)
 				shot_after = ""
 				if screenshot_dir:
 					shot_after = os.path.join(screenshot_dir, f"{lead_prefix}_after_submit.png")
