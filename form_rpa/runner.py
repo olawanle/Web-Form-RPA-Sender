@@ -109,27 +109,44 @@ def _ultra_aggressive_submit(driver, use_multistep_submit: bool) -> bool:
 
 
 def _handle_javascript_alerts(driver) -> bool:
-	"""Handle JavaScript alerts and confirmations."""
+	"""ULTRA-AGGRESSIVE JavaScript alert handling with multiple strategies."""
 	try:
+		# Strategy 1: Try to handle the alert
 		alert = driver.switch_to.alert
 		alert_text = alert.text
 		print(f"   🚨 JavaScript Alert: {alert_text}")
 		
 		# Handle different types of alerts
-		if any(keyword in alert_text.lower() for keyword in ["送信", "submit", "確認", "confirm", "ok", "yes", "はい"]):
+		if any(keyword in alert_text.lower() for keyword in ["送信", "submit", "確認", "confirm", "ok", "yes", "はい", "よろしい", "続行", "proceed"]):
 			alert.accept()
-			print("   ✓ Accepted alert")
+			print("   ✓ Accepted positive alert")
 			return True
-		elif any(keyword in alert_text.lower() for keyword in ["キャンセル", "cancel", "no", "いいえ"]):
+		elif any(keyword in alert_text.lower() for keyword in ["キャンセル", "cancel", "no", "いいえ", "中止", "停止"]):
 			alert.dismiss()
-			print("   ✗ Dismissed alert")
+			print("   ✗ Dismissed negative alert")
 			return False
 		else:
 			# Default to accept for unknown alerts
 			alert.accept()
-			print("   ✓ Accepted unknown alert")
+			print("   ✓ Accepted unknown alert (default)")
 			return True
-	except Exception:
+	except Exception as e:
+		print(f"   ⚠️ Alert handling failed: {str(e)[:50]}")
+		
+		# Strategy 2: Try to dismiss any remaining alerts
+		try:
+			driver.switch_to.alert.dismiss()
+			print("   ✓ Dismissed alert via fallback")
+		except Exception:
+			pass
+		
+		# Strategy 3: Try to accept any remaining alerts
+		try:
+			driver.switch_to.alert.accept()
+			print("   ✓ Accepted alert via fallback")
+		except Exception:
+			pass
+		
 		return False
 
 
@@ -219,10 +236,14 @@ def process_leads(
 				print(f"   URL: {inquiry_url}")
 				
 				try:
+					# Store original URL for success detection
+					driver._original_url = inquiry_url
 					driver.get(inquiry_url)
 				except WebDriverException:
 					driver.quit()
 					driver = create_driver(browser=browser, headless=headless, remote_url=remote_url)
+					# Store original URL for success detection
+					driver._original_url = inquiry_url
 					driver.get(inquiry_url)
 
 				_wait_dom_ready(driver, timeout=15)
@@ -274,6 +295,8 @@ def process_leads(
 				# Handle JavaScript alerts that might appear
 				if clicked:
 					_handle_javascript_alerts(driver)
+					# Wait a bit after handling alerts
+					time.sleep(1)
 				
 				# If required errors, try to fill missing required fields
 				if (not preview) and detect_required_errors(driver):
@@ -309,6 +332,35 @@ def process_leads(
 						except Exception:
 							continue
 					
+					# Also try to fill any empty fields that might be required
+					all_fields = driver.find_elements(By.CSS_SELECTOR, "input, textarea, select")
+					for field in all_fields:
+						try:
+							if not field.get_attribute("value") and not field.text and field.is_displayed():
+								field_type = field.get_attribute("type") or "text"
+								field_name = (field.get_attribute("name") or "").lower()
+								
+								placeholder = ""
+								if field_type == "email" or "email" in field_name or "mail" in field_name:
+									placeholder = "test@example.com"
+								elif field_type == "tel" or "phone" in field_name or "tel" in field_name:
+									placeholder = "03-1234-5678"
+								elif "name" in field_name or "氏名" in field_name:
+									placeholder = "テスト太郎"
+								elif "company" in field_name or "会社" in field_name:
+									placeholder = "テスト株式会社"
+								elif "address" in field_name or "住所" in field_name:
+									placeholder = "東京都渋谷区1-1-1"
+								else:
+									placeholder = "テストデータ"
+								
+								if placeholder:
+									field.clear()
+									field.send_keys(placeholder)
+									print(f"   ✓ Filled empty field: {field_name}")
+						except Exception:
+							continue
+					
 					# Retry submit with multiple strategies
 					print(f"   🔄 Retrying submit after filling required fields...")
 					clicked = clicked or _ultra_aggressive_submit(driver, use_multistep_submit)
@@ -322,7 +374,7 @@ def process_leads(
 					print(f"   🔄 ULTRA-AGGRESSIVE retry: Trying all possible submission methods...")
 					
 					# Retry 1: Wait and try again
-					time.sleep(3)
+					time.sleep(5)
 					clicked = _ultra_aggressive_submit(driver, use_multistep_submit)
 					
 					# Retry 2: Try JavaScript form submission directly

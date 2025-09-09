@@ -782,12 +782,46 @@ def wait_post_submit(driver: WebDriver, timeout: int = 10) -> bool:
 			return True
 		
 		# Strategy 6: Check for error indicators (if none, might be success)
-		error_indicators = ["エラー", "error", "失敗", "failed", "問題", "problem", "不正", "invalid", "required", "必須"]
+		error_indicators = ["エラー", "error", "失敗", "failed", "問題", "problem", "不正", "invalid", "required", "必須", "入力してください", "please enter", "入力エラー", "validation error"]
 		error_count = sum(1 for indicator in error_indicators if indicator in page_source)
 		
 		if error_count == 0:
 			print("   ✅ Success detected via no error indicators")
 			return True
+		
+		# Strategy 7: Check if URL changed (might indicate success)
+		try:
+			current_url = driver.current_url.lower()
+			original_url = getattr(driver, '_original_url', '').lower()
+			if current_url != original_url and any(success_word in current_url for success_word in ["success", "complete", "thanks", "thank", "sent", "送信完了", "完了", "confirmation", "確認"]):
+				print("   ✅ Success detected via URL change")
+				return True
+		except Exception:
+			pass
+		
+		# Strategy 8: Check for form disappearance (strong success indicator)
+		forms = driver.find_elements(By.CSS_SELECTOR, "form")
+		if len(forms) == 0:
+			print("   ✅ Success detected via form disappearance")
+			return True
+		
+		# Strategy 9: Check for thank you messages in specific elements
+		thank_elements = driver.find_elements(By.CSS_SELECTOR, ".thank-you, .success, .complete, .confirmation, [class*='thank'], [class*='success'], [class*='complete']")
+		if thank_elements:
+			print(f"   ✅ Success detected via {len(thank_elements)} thank you elements")
+			return True
+		
+		# Strategy 10: Check for specific success text patterns
+		success_text_patterns = [
+			"お問い合わせを受け付けました", "お問い合わせを承りました", "お問い合わせいただき",
+			"ご連絡いたします", "折り返しご連絡", "担当者より", "確認メールを送信",
+			"自動返信メール", "受付完了", "処理完了", "送信完了いたしました"
+		]
+		
+		for pattern in success_text_patterns:
+			if pattern in page_source:
+				print(f"   ✅ Success detected via specific pattern: {pattern}")
+				return True
 		
 		print("   ❌ No success indicators found")
 		return False
@@ -1456,8 +1490,14 @@ def _fill_all_checkboxes_aggressive(driver: WebDriver) -> int:
 					print(f"   ✅ Checkbox {i+1}: Force checked!")
 					continue
 				else:
-					print(f"   ❌ Checkbox {i+1}: Force check failed")
-					continue
+					# Try even more aggressive methods
+					if _checkbox_ultra_force_check(driver, cb):
+						filled_count += 1
+						print(f"   ✅ Checkbox {i+1}: Ultra force checked!")
+						continue
+					else:
+						print(f"   ❌ Checkbox {i+1}: All force methods failed")
+						continue
 			
 			# Get associated text for analysis
 			text = _get_checkbox_associated_text(driver, cb).lower()
@@ -1598,6 +1638,226 @@ def _checkbox_force_check(driver: WebDriver, cb) -> bool:
 			if parent.tag_name.lower() == "label":
 				parent.click()
 				return cb.is_selected()
+		except Exception:
+			pass
+		
+		return False
+	except Exception:
+		return False
+
+
+def _checkbox_ultra_force_check(driver: WebDriver, cb) -> bool:
+	"""ULTRA-AGGRESSIVE checkbox checking with 15+ methods."""
+	try:
+		# Method 1: Direct property manipulation
+		driver.execute_script("""
+			arguments[0].checked = true;
+			arguments[0].setAttribute('checked', 'checked');
+			arguments[0].setAttribute('value', 'on');
+			arguments[0].setAttribute('aria-checked', 'true');
+		""", cb)
+		
+		# Method 2: Trigger all possible events
+		driver.execute_script("""
+			var events = ['change', 'click', 'input', 'focus', 'blur', 'mousedown', 'mouseup'];
+			events.forEach(function(eventType) {
+				arguments[0].dispatchEvent(new Event(eventType, {bubbles: true, cancelable: true}));
+			});
+		""", cb)
+		
+		# Method 3: Try to find and click any associated element
+		try:
+			# Look for labels, spans, divs that might be clickable
+			associated_elements = driver.find_elements(By.XPATH, f"//label[contains(@for, '{cb.get_attribute('id') or ''}')] | //span[contains(text(), '')] | //div[contains(@class, 'checkbox')]")
+			for el in associated_elements:
+				try:
+					el.click()
+					if cb.is_selected():
+						return True
+				except Exception:
+					continue
+		except Exception:
+			pass
+		
+		# Method 4: Try to find parent elements and click them
+		try:
+			parent = cb.find_element(By.XPATH, "..")
+			parent.click()
+			if cb.is_selected():
+				return True
+			
+			# Try grandparent
+			grandparent = parent.find_element(By.XPATH, "..")
+			grandparent.click()
+			if cb.is_selected():
+				return True
+		except Exception:
+			pass
+		
+		# Method 5: Try to find elements with same name
+		try:
+			name = cb.get_attribute("name")
+			if name:
+				same_name_elements = driver.find_elements(By.CSS_SELECTOR, f"input[name='{name}']")
+				for el in same_name_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 6: Try to find elements with same class
+		try:
+			class_name = cb.get_attribute("class")
+			if class_name:
+				same_class_elements = driver.find_elements(By.CSS_SELECTOR, f".{class_name}")
+				for el in same_class_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 7: Try to find elements with same value
+		try:
+			value = cb.get_attribute("value")
+			if value:
+				same_value_elements = driver.find_elements(By.CSS_SELECTOR, f"input[value='{value}']")
+				for el in same_value_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 8: Try to find elements with same id
+		try:
+			element_id = cb.get_attribute("id")
+			if element_id:
+				same_id_elements = driver.find_elements(By.CSS_SELECTOR, f"#{element_id}")
+				for el in same_id_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 9: Try to find elements with same data attributes
+		try:
+			data_attrs = ["data-id", "data-name", "data-value", "data-checkbox"]
+			for attr in data_attrs:
+				value = cb.get_attribute(attr)
+				if value:
+					same_data_elements = driver.find_elements(By.CSS_SELECTOR, f"[{attr}='{value}']")
+					for el in same_data_elements:
+						try:
+							el.click()
+							if cb.is_selected():
+								return True
+						except Exception:
+							continue
+		except Exception:
+			pass
+		
+		# Method 10: Try to find elements with same text content
+		try:
+			text = cb.get_attribute("textContent") or cb.text
+			if text:
+				same_text_elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{text}')]")
+				for el in same_text_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 11: Try to find elements with same placeholder
+		try:
+			placeholder = cb.get_attribute("placeholder")
+			if placeholder:
+				same_placeholder_elements = driver.find_elements(By.CSS_SELECTOR, f"[placeholder='{placeholder}']")
+				for el in same_placeholder_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 12: Try to find elements with same title
+		try:
+			title = cb.get_attribute("title")
+			if title:
+				same_title_elements = driver.find_elements(By.CSS_SELECTOR, f"[title='{title}']")
+				for el in same_title_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 13: Try to find elements with same aria-label
+		try:
+			aria_label = cb.get_attribute("aria-label")
+			if aria_label:
+				same_aria_elements = driver.find_elements(By.CSS_SELECTOR, f"[aria-label='{aria_label}']")
+				for el in same_aria_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 14: Try to find elements with same role
+		try:
+			role = cb.get_attribute("role")
+			if role:
+				same_role_elements = driver.find_elements(By.CSS_SELECTOR, f"[role='{role}']")
+				for el in same_role_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
+		except Exception:
+			pass
+		
+		# Method 15: Try to find elements with same type
+		try:
+			element_type = cb.get_attribute("type")
+			if element_type:
+				same_type_elements = driver.find_elements(By.CSS_SELECTOR, f"input[type='{element_type}']")
+				for el in same_type_elements:
+					try:
+						el.click()
+						if cb.is_selected():
+							return True
+					except Exception:
+						continue
 		except Exception:
 			pass
 		
