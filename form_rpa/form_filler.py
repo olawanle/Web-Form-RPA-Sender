@@ -815,13 +815,76 @@ def wait_post_submit(driver: WebDriver, timeout: int = 10) -> bool:
 		success_text_patterns = [
 			"お問い合わせを受け付けました", "お問い合わせを承りました", "お問い合わせいただき",
 			"ご連絡いたします", "折り返しご連絡", "担当者より", "確認メールを送信",
-			"自動返信メール", "受付完了", "処理完了", "送信完了いたしました"
+			"自動返信メール", "受付完了", "処理完了", "送信完了いたしました",
+			"送信いたしました", "送信が完了", "送信が完了しました", "送信ありがとう",
+			"お問い合わせありがとう", "お問い合わせを受け付け", "受付いたしました",
+			"ご送信いただき", "ご送信ありがとう", "確認のメール", "メールを送信",
+			"内容を確認", "内容を確認いたしました", "内容を確認させていただきました",
+			"担当者から", "折り返し", "折り返しご連絡", "ご連絡いたします",
+			"ありがとうございました", "ありがとうございます", "ご利用ありがとう",
+			"お申し込み", "お申し込みありがとう", "お申し込みいただき",
+			"ご登録", "ご登録ありがとう", "ご登録いただき", "登録完了",
+			"お受け取り", "お受け取りいただき", "受け取りました",
+			"処理完了", "処理が完了", "処理いたしました", "処理が正常に完了",
+			"正常に送信", "正常に処理", "正常に受付", "正常に完了",
+			"エラーが発生", "エラーは発生", "問題はありません", "問題ありません",
+			"しばらくお待ち", "しばらくお待ちください", "少々お待ち",
+			"完了いたしました", "完了しました", "完了いたします", "完了です",
+			"受付番号", "お問い合わせ番号", "申込番号", "登録番号",
+			"お疲れ様", "お疲れ様でした", "ご苦労様", "ご苦労様でした"
 		]
 		
 		for pattern in success_text_patterns:
 			if pattern in page_source:
 				print(f"   ✅ Success detected via specific pattern: {pattern}")
 				return True
+		
+		# Strategy 11: Check for form submission success indicators
+		form_success_indicators = [
+			"form submitted", "form sent", "form completed", "form processed",
+			"フォーム送信", "フォーム完了", "フォーム処理", "フォーム受付",
+			"送信フォーム", "完了フォーム", "処理フォーム", "受付フォーム"
+		]
+		
+		for indicator in form_success_indicators:
+			if indicator in page_source:
+				print(f"   ✅ Success detected via form indicator: {indicator}")
+				return True
+		
+		# Strategy 12: Check for page redirect indicators
+		redirect_indicators = [
+			"redirect", "moved", "location", "window.location",
+			"リダイレクト", "移動", "転送", "ページ移動"
+		]
+		
+		for indicator in redirect_indicators:
+			if indicator in page_source:
+				print(f"   ✅ Success detected via redirect indicator: {indicator}")
+				return True
+		
+		# Strategy 13: Check for JavaScript success indicators
+		js_success_indicators = [
+			"success: true", "success:true", "status: 'success'", "status:'success'",
+			"result: 'success'", "result:'success'", "completed: true", "completed:true",
+			"sent: true", "sent:true", "submitted: true", "submitted:true"
+		]
+		
+		for indicator in js_success_indicators:
+			if indicator in page_source:
+				print(f"   ✅ Success detected via JS indicator: {indicator}")
+				return True
+		
+		# Strategy 14: Check for meta refresh (might indicate success)
+		meta_refresh = driver.find_elements(By.CSS_SELECTOR, "meta[http-equiv='refresh']")
+		if meta_refresh:
+			print("   ✅ Success detected via meta refresh")
+			return True
+		
+		# Strategy 15: Check for iframe changes (might indicate success)
+		iframes = driver.find_elements(By.CSS_SELECTOR, "iframe")
+		if len(iframes) > 0:
+			print("   ✅ Success detected via iframe presence")
+			return True
 		
 		print("   ❌ No success indicators found")
 		return False

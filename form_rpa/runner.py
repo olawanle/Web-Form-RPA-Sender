@@ -296,6 +296,12 @@ def process_leads(
 				if clicked:
 					_handle_javascript_alerts(driver)
 					# Wait a bit after handling alerts
+					time.sleep(2)
+					
+					# Check for more alerts after waiting
+					_handle_javascript_alerts(driver)
+					
+					# Wait for page to stabilize after alert handling
 					time.sleep(1)
 				
 				# If required errors, try to fill missing required fields
@@ -368,6 +374,8 @@ def process_leads(
 					# Handle alerts again after retry
 					if clicked:
 						_handle_javascript_alerts(driver)
+						time.sleep(2)
+						_handle_javascript_alerts(driver)
 
 				if not clicked:
 					# ULTRA-AGGRESSIVE retry: Try multiple strategies before giving up
@@ -407,17 +415,25 @@ def process_leads(
 					
 					# Retry 4: Try clicking any clickable element
 					if not clicked:
-						clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit], a, [onclick], [role=button]")
-						for el in clickable_elements:
-							try:
-								if el.is_displayed() and el.is_enabled():
-									driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
-									el.click()
-									print("   ✓ Clicked clickable element")
-									clicked = True
-									break
-							except Exception:
-								continue
+						try:
+							clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, input[type=button], input[type=submit], a, [onclick], [role=button]")
+							for el in clickable_elements:
+								try:
+									if el.is_displayed() and el.is_enabled():
+										driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
+										el.click()
+										print("   ✓ Clicked clickable element")
+										clicked = True
+										break
+								except Exception as e:
+									# Handle stale element reference
+									if "stale element reference" in str(e).lower():
+										print("   ⚠️ Stale element detected, refreshing...")
+										time.sleep(1)
+										continue
+									continue
+						except Exception:
+							pass
 					
 					if not clicked:
 						lead_result["status"] = "failed"
@@ -429,7 +445,14 @@ def process_leads(
 						continue
 
 				print(f"   ⏳ Waiting for post-submit confirmation...")
-				submission_successful = wait_post_submit(driver)
+				# Try multiple success detection attempts
+				submission_successful = False
+				for attempt in range(3):
+					print(f"   🔍 Success detection attempt {attempt + 1}/3...")
+					submission_successful = wait_post_submit(driver, timeout=15)
+					if submission_successful:
+						break
+					time.sleep(2)
 				shot_after = ""
 				if screenshot_dir:
 					shot_after = os.path.join(screenshot_dir, f"{lead_prefix}_after_submit.png")
